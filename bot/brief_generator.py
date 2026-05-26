@@ -98,7 +98,11 @@ def _format_articles_for_prompt(articles: list[dict]) -> str:
 # OpenRouter call
 # ---------------------------------------------------------------------------
 
-def call_openrouter(articles: list[dict], api_key: str) -> Optional[str]:
+def call_openrouter(
+    articles: list[dict],
+    api_key: str,
+    preferences: Optional[str] = None,
+) -> Optional[str]:
     """
     Send articles to OpenRouter and return the generated brief text.
     Returns None on failure so the caller can log and continue.
@@ -108,6 +112,8 @@ def call_openrouter(articles: list[dict], api_key: str) -> Optional[str]:
         "articles. Use ONLY these articles — do not reference any other sources.\n\n"
         + _format_articles_for_prompt(articles)
     )
+    if preferences:
+        user_message += f"\n\nBrief customisation for this recipient: {preferences}"
 
     payload = {
         "model": OPENROUTER_MODEL,
@@ -349,25 +355,36 @@ async def run(
             len(relevant),
         )
 
-        brief_text = call_openrouter(relevant, openrouter_key)
-        if not brief_text:
-            for user in group:
-                log_delivery(
-                    user_id=user["telegram_id"],
-                    status="failed",
-                    error_message="OpenRouter returned no content",
-                )
-            continue
-
         article_urls = [a["url"] for a in relevant]
 
-        # Send to each user in the group, filtering their personal seen list
-        for user in group:
-            seen = get_seen_urls(user["telegram_id"])
-            unseen_urls = [u for u in article_urls if u not in seen]
-            # We still send the shared brief text even if some URLs were seen;
-            # the brief was generated from the group's article set.
-            tasks.append(process_user(user, brief_text, unseen_urls))
+        # Partition group: users with preferences need individual LLM calls
+        users_no_prefs   = [u for u in group if not u.get("preferences")]
+        users_with_prefs = [u for u in group if u.get("preferences")]
+
+        # Shared brief for users with no preferences (preserves grouping optimisation)
+        if users_no_prefs:
+            brief_text = call_openrouter(relevant, openrouter_key)
+            if brief_text:
+                for user in users_no_prefs:
+                    seen = get_seen_urls(user["telegram_id"])
+                    tasks.append(process_user(user, brief_text,
+                                              [u for u in article_urls if u not in seen]))
+            else:
+                for user in users_no_prefs:
+                    log_delivery(user_id=user["telegram_id"], status="failed",
+                                 error_message="OpenRouter returned no content")
+
+        # Per-user brief for users with custom preferences (capped at 200 chars)
+        for user in users_with_prefs:
+            prefs = (user.get("preferences") or "")[:200]
+            brief_text = call_openrouter(relevant, openrouter_key, prefs)
+            if brief_text:
+                seen = get_seen_urls(user["telegram_id"])
+                tasks.append(process_user(user, brief_text,
+                                          [u for u in article_urls if u not in seen]))
+            else:
+                log_delivery(user_id=user["telegram_id"], status="failed",
+                             error_message="OpenRouter returned no content")
 
     # Run all sends concurrently (sender.py handles per-user rate limiting)
     await asyncio.gather(*tasks)

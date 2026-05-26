@@ -147,6 +147,13 @@ def log_delivery(
     ).execute()
 
 
+def log_feedback(user_id: int, rating: str) -> None:
+    """Insert one row into brief_feedback (rating = 'up' or 'down')."""
+    get_client().table("brief_feedback").insert(
+        {"user_id": user_id, "rating": rating}
+    ).execute()
+
+
 def get_recent_logs(days: int = 7) -> list[dict]:
     """Fetch delivery_log rows from the last N days (admin /logs command)."""
     cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()

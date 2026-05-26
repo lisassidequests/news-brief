@@ -218,6 +218,19 @@ async function handleFreeText(message, env) {
       break;
     }
 
+    case "awaiting_feedback": {
+      if (text.trim().toLowerCase() === "clear") {
+        await upsertUser({ telegram_id: telegramId, preferences: null, onboarding_step: null }, env);
+        await sendMessage(chatId, "✅ Preferences cleared.", env);
+      } else {
+        const existing = user.preferences || "";
+        const combined = (text.trim() + (existing ? " | " + existing : "")).slice(0, 300);
+        await upsertUser({ telegram_id: telegramId, preferences: combined, onboarding_step: null }, env);
+        await sendMessage(chatId, "✅ Saved — I'll apply this to your next brief.", env);
+      }
+      break;
+    }
+
     default:
       await sendMessage(chatId, "Use /start to configure your brief.", env);
   }
@@ -252,6 +265,26 @@ async function handleCallbackQuery(callbackQuery, env) {
   } else if (data === "resume:confirm") {
     await setUserActive(telegramId, true, env);
     await sendMessage(chatId, "▶️ Brief delivery resumed! You'll receive your next brief at 8:00 AM SGT.", env);
+  } else if (data === "fb:up") {
+    await saveFeedback(telegramId, "up", env);
+    await sendMessage(chatId, "👍 Thanks — glad it was useful!", env);
+  } else if (data === "fb:down") {
+    await saveFeedback(telegramId, "down", env);
+    await upsertUser({ telegram_id: telegramId, onboarding_step: "awaiting_feedback" }, env);
+    await sendMessage(chatId,
+      "What was off with today's brief? Tell me in your own words.\n\n" +
+      "_Example: \"Too US-centric. I need more APAC coverage and shorter summaries.\"_",
+      env);
+  } else if (data === "fb:refine") {
+    const user = await getUser(telegramId, env);
+    const current = user?.preferences
+      ? `\n\nCurrent note: _"${user.preferences}"_`
+      : "";
+    await upsertUser({ telegram_id: telegramId, onboarding_step: "awaiting_feedback" }, env);
+    await sendMessage(chatId,
+      `What would make your brief better?${current}\n\n` +
+      `_New text is added to your existing note. Reply "clear" to reset._`,
+      env);
   }
 }
 
@@ -279,7 +312,8 @@ async function handleSettings(message, env) {
       `📋 Format: ${user.format.toUpperCase()}\n` +
       `🏷 Topics: ${topics.length ? topics.join(", ") : "All"}\n` +
       `🕗 Delivery: 8:00 AM SGT daily\n` +
-      `📊 Status: ${statusEmoji}\n\n` +
+      `📊 Status: ${statusEmoji}\n` +
+      `📝 Preferences: ${user.preferences || "None"}\n\n` +
       `To change a setting, reply with what you'd like to update.\n` +
       `_Example: "Change my format to TL;DR" or "Update topics to ransomware, AI"_`,
     env
@@ -561,6 +595,10 @@ async function setUserActive(telegramId, isActive, env) {
 async function getAllUsers(env) {
   const data = await supabaseRequest("GET", "users?select=*", null, env);
   return Array.isArray(data) ? data : [];
+}
+
+async function saveFeedback(userId, rating, env) {
+  await supabaseRequest("POST", "brief_feedback", { user_id: userId, rating }, env);
 }
 
 async function getRecentLogs(env) {

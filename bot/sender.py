@@ -13,7 +13,7 @@ import logging
 import re
 from datetime import datetime, timezone
 
-from telegram import Bot
+from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import TelegramError
 
 logger = logging.getLogger(__name__)
@@ -150,6 +150,18 @@ async def send_brief(telegram_id: int, brief_text: str, bot_token: str) -> None:
             # Respect rate limit: 1 message per second per user
             if i < len(chunks) - 1:
                 await asyncio.sleep(SEND_DELAY_SECONDS)
+
+        # Feedback prompt after the last brief chunk
+        await asyncio.sleep(SEND_DELAY_SECONDS)
+        await bot.send_message(
+            chat_id=telegram_id,
+            text="Was this brief useful?",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("👍 Useful",     callback_data="fb:up"),
+                InlineKeyboardButton("👎 Not useful", callback_data="fb:down"),
+                InlineKeyboardButton("✏️ Refine",     callback_data="fb:refine"),
+            ]]),
+        )
 
 
 async def send_text(telegram_id: int, text: str, bot_token: str) -> None:

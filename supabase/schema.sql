@@ -63,6 +63,23 @@ CREATE INDEX IF NOT EXISTS idx_delivery_log_user    ON delivery_log (user_id);
 CREATE INDEX IF NOT EXISTS idx_delivery_log_sent_at ON delivery_log (sent_at);
 
 -- ---------------------------------------------------------------------------
+-- TABLE: brief_feedback
+-- Immutable audit trail of user ratings on delivered briefs.
+-- Used for analytics; individual preferences are stored on users.preferences.
+-- To add to an existing deployment, paste only this block into the SQL editor.
+-- ---------------------------------------------------------------------------
+ALTER TABLE users ADD COLUMN IF NOT EXISTS preferences TEXT;
+
+CREATE TABLE IF NOT EXISTS brief_feedback (
+    id         BIGSERIAL PRIMARY KEY,
+    user_id    BIGINT NOT NULL REFERENCES users (telegram_id) ON DELETE CASCADE,
+    rating     TEXT NOT NULL CHECK (rating IN ('up', 'down')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_brief_feedback_user ON brief_feedback (user_id);
+
+-- ---------------------------------------------------------------------------
 -- TABLE: articles
 -- Short-lived cache of fetched article content.
 -- Avoids re-hitting NewsAPI and RSS feeds when re-running brief generation
