@@ -1,0 +1,161 @@
+"""
+supabase_client.py — thin wrapper around the Supabase REST API.
+
+All database access for the bot goes through this module.  We use the
+`supabase-py` library (which itself wraps PostgREST) rather than raw HTTP so
+that query building stays readable.  The service-role key bypasses RLS and
+lets the bot read/write any row.
+"""
+
+import os
+import logging
+from datetime import datetime, timezone, timedelta
+from typing import Optional
+
+from supabase import create_client, Client
+
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Client singleton — created once at import time.
+# ---------------------------------------------------------------------------
+
+def _build_client() -> Client:
+    url = os.environ["SUPABASE_URL"]
+    key = os.environ["SUPABASE_SERVICE_KEY"]
+    return create_client(url, key)
+
+
+_client: Optional[Client] = None
+
+
+def get_client() -> Client:
+    """Return (or lazily initialise) the shared Supabase client."""
+    global _client
+    if _client is None:
+        _client = _build_client()
+    return _client
+
+
+# ---------------------------------------------------------------------------
+# User helpers
+# ---------------------------------------------------------------------------
+
+def get_active_users() -> list[dict]:
+    """Return all rows from `users` where is_active = true."""
+    resp = get_client().table("users").select("*").eq("is_active", True).execute()
+    return resp.data or []
+
+
+def get_user(telegram_id: int) -> Optional[dict]:
+    """Fetch a single user by Telegram ID, or None if not found."""
+    resp = (
+        get_client()
+        .table("users")
+        .select("*")
+        .eq("telegram_id", telegram_id)
+        .maybe_single()
+        .execute()
+    )
+    return resp.data
+
+
+def upsert_user(data: dict) -> dict:
+    """Insert or update a user row.  `data` must include `telegram_id`."""
+    resp = (
+        get_client()
+        .table("users")
+        .upsert(data, on_conflict="telegram_id")
+        .execute()
+    )
+    return resp.data[0] if resp.data else {}
+
+
+def set_user_active(telegram_id: int, active: bool) -> None:
+    """Toggle is_active for a user (used by /pause and /resume)."""
+    get_client().table("users").update({"is_active": active}).eq(
+        "telegram_id", telegram_id
+    ).execute()
+
+
+def get_all_users() -> list[dict]:
+    """Return every user row (admin /users command)."""
+    resp = get_client().table("users").select("*").execute()
+    return resp.data or []
+
+
+# ---------------------------------------------------------------------------
+# Seen-articles helpers
+# ---------------------------------------------------------------------------
+
+def prune_old_seen_articles() -> int:
+    """Delete seen_articles rows older than 7 days.  Returns number deleted."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    resp = (
+        get_client()
+        .table("seen_articles")
+        .delete()
+        .lt("seen_at", cutoff)
+        .execute()
+    )
+    deleted = len(resp.data) if resp.data else 0
+    logger.info("Pruned %d old seen_articles rows", deleted)
+    return deleted
+
+
+def get_seen_urls(user_id: int) -> set[str]:
+    """Return the set of article URLs already seen by this user."""
+    resp = (
+        get_client()
+        .table("seen_articles")
+        .select("article_url")
+        .eq("user_id", user_id)
+        .execute()
+    )
+    return {row["article_url"] for row in (resp.data or [])}
+
+
+def mark_articles_seen(user_id: int, urls: list[str]) -> None:
+    """Insert rows for each URL so the user won't receive them again."""
+    if not urls:
+        return
+    rows = [{"user_id": user_id, "article_url": url} for url in urls]
+    # ignore_duplicates=True handles the UNIQUE constraint gracefully
+    get_client().table("seen_articles").upsert(
+        rows, on_conflict="user_id,article_url"
+    ).execute()
+
+
+# ---------------------------------------------------------------------------
+# Delivery-log helpers
+# ---------------------------------------------------------------------------
+
+def log_delivery(
+    user_id: int,
+    status: str,
+    article_count: int = 0,
+    error_message: Optional[str] = None,
+) -> None:
+    """Write one row to delivery_log after a send attempt."""
+    get_client().table("delivery_log").insert(
+        {
+            "user_id": user_id,
+            "status": status,
+            "article_count": article_count,
+            "error_message": error_message,
+        }
+    ).execute()
+
+
+def get_recent_logs(days: int = 7) -> list[dict]:
+    """Fetch delivery_log rows from the last N days (admin /logs command)."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    resp = (
+        get_client()
+        .table("delivery_log")
+        .select("*")
+        .gte("sent_at", cutoff)
+        .order("sent_at", desc=True)
+        .execute()
+    )
+    return resp.data or []

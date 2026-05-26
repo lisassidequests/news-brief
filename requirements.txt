@@ -1,0 +1,14 @@
+# Python dependencies for bot/ scripts.
+# All packages are pure-Python (no compiled binaries required).
+
+# Supabase Python client (wraps PostgREST + auth)
+supabase==2.15.1
+
+# Telegram Bot API wrapper (async)
+python-telegram-bot==21.10
+
+# HTTP client for NewsAPI and OpenRouter calls
+requests==2.32.3
+
+# Pure-Python RSS/Atom feed parser
+feedparser==6.0.11

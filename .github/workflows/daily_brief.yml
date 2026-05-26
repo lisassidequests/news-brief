@@ -1,0 +1,40 @@
+# daily_brief.yml — runs every day at 00:00 UTC (08:00 SGT).
+# Sends the Cyber Intel Brief to all active users in Supabase.
+
+name: Daily Cyber Intel Brief
+
+on:
+  schedule:
+    # 00:00 UTC = 08:00 Asia/Singapore (UTC+8)
+    - cron: "0 0 * * *"
+  # Also allow manual runs from the GitHub Actions UI for testing
+  workflow_dispatch:
+
+jobs:
+  send-brief:
+    name: Generate and Send Daily Brief
+    runs-on: ubuntu-latest
+    timeout-minutes: 15  # Prevent runaway jobs
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run brief generator (all active users)
+        # brief_generator.py with no --user flag processes all active users
+        run: python bot/brief_generator.py
+        env:
+          TELEGRAM_BOT_TOKEN:   ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          OPENROUTER_API_KEY:   ${{ secrets.OPENROUTER_API_KEY }}
+          NEWSAPI_KEY:          ${{ secrets.NEWSAPI_KEY }}
+          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
