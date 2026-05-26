@@ -63,6 +63,28 @@ CREATE INDEX IF NOT EXISTS idx_delivery_log_user    ON delivery_log (user_id);
 CREATE INDEX IF NOT EXISTS idx_delivery_log_sent_at ON delivery_log (sent_at);
 
 -- ---------------------------------------------------------------------------
+-- TABLE: articles
+-- Short-lived cache of fetched article content.
+-- Avoids re-hitting NewsAPI and RSS feeds when re-running brief generation
+-- (e.g. after tweaking the prompt or format) within the same day.
+-- Rows older than 48 hours are pruned at the start of each brief run.
+-- To add this table to an existing deployment, paste only this block into
+-- the Supabase SQL editor — no need to re-run the full schema.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS articles (
+    id           BIGSERIAL PRIMARY KEY,
+    url          TEXT UNIQUE NOT NULL,    -- Natural dedup key
+    title        TEXT NOT NULL,
+    source       TEXT NOT NULL,
+    published_at TIMESTAMPTZ,            -- NULL when source didn't supply a date
+    summary      TEXT,
+    fetched_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()  -- When we last fetched this article
+);
+
+-- Index for cache-freshness queries and pruning (both filter on fetched_at)
+CREATE INDEX IF NOT EXISTS idx_articles_fetched_at ON articles (fetched_at);
+
+-- ---------------------------------------------------------------------------
 -- Row-level security: disabled intentionally.
 -- The bot accesses Supabase exclusively via the service-role key from
 -- GitHub Actions and the Cloudflare Worker — no end-user JWT auth.

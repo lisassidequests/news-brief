@@ -159,3 +159,98 @@ def get_recent_logs(days: int = 7) -> list[dict]:
         .execute()
     )
     return resp.data or []
+
+
+# ---------------------------------------------------------------------------
+# Article cache helpers
+# ---------------------------------------------------------------------------
+
+def get_cached_articles(max_age_hours: int = 24) -> list[dict]:
+    """
+    Return articles fetched within the last `max_age_hours` hours.
+
+    If the result is non-empty the cache is considered fresh and the caller
+    should skip re-fetching from NewsAPI/RSS.  Returns an empty list when the
+    cache is stale or unpopulated (cache miss → caller must fetch fresh).
+
+    Converts `published_at` from the ISO string stored in Postgres back to a
+    UTC-aware datetime so the returned dicts match the shape produced by
+    news_fetcher.fetch_all_articles().
+    """
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=max_age_hours)).isoformat()
+    resp = (
+        get_client()
+        .table("articles")
+        .select("url,title,source,published_at,summary")
+        .gte("fetched_at", cutoff)
+        .execute()
+    )
+    rows = resp.data or []
+    articles = []
+    for row in rows:
+        pub = None
+        if row.get("published_at"):
+            try:
+                pub = datetime.fromisoformat(row["published_at"].replace("Z", "+00:00"))
+                if pub.tzinfo is None:
+                    pub = pub.replace(tzinfo=timezone.utc)
+            except ValueError:
+                pass
+        articles.append(
+            {
+                "title": row["title"],
+                "url": row["url"],
+                "source": row["source"],
+                "published_at": pub,
+                "summary": row.get("summary") or "",
+            }
+        )
+    logger.info("Article cache returned %d articles (max_age=%dh)", len(articles), max_age_hours)
+    return articles
+
+
+def cache_articles(articles: list[dict]) -> None:
+    """
+    Upsert a list of article dicts to the `articles` table.
+
+    On URL conflict, `fetched_at` is updated to NOW() so the freshness clock
+    resets — "last fetched wins".  `published_at` is serialised from a Python
+    datetime to an ISO string for Postgres TIMESTAMPTZ storage.
+    """
+    if not articles:
+        return
+    rows = []
+    for a in articles:
+        pub = a.get("published_at")
+        rows.append(
+            {
+                "url": a["url"],
+                "title": a["title"],
+                "source": a["source"],
+                "published_at": pub.isoformat() if pub else None,
+                "summary": a.get("summary") or "",
+                "fetched_at": datetime.now(timezone.utc).isoformat(),
+            }
+        )
+    get_client().table("articles").upsert(rows, on_conflict="url").execute()
+    logger.info("Cached %d articles to Supabase", len(rows))
+
+
+def prune_old_articles(max_age_hours: int = 48) -> int:
+    """
+    Delete articles rows older than `max_age_hours`.
+
+    Called at the start of each brief run alongside prune_old_seen_articles()
+    to keep the table small.  Returns the number of rows deleted.
+    """
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=max_age_hours)).isoformat()
+    resp = (
+        get_client()
+        .table("articles")
+        .delete()
+        .lt("fetched_at", cutoff)
+        .execute()
+    )
+    deleted = len(resp.data) if resp.data else 0
+    logger.info("Pruned %d old articles rows", deleted)
+    return deleted
