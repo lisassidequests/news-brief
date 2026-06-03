@@ -1,0 +1,3 @@
+name            = "cyber-intel-brief-bot"   # must match your existing Cloudflare Worker name
+main            = "worker.js"
+compatibility_date = "2025-06-01"
