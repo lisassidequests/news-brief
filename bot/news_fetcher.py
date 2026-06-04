@@ -1,12 +1,13 @@
 """
-news_fetcher.py — fetches cybersecurity articles from NewsAPI and RSS feeds.
+news_fetcher.py — fetches cybersecurity articles from authoritative RSS feeds.
 
-Two sources are combined:
-  1. NewsAPI  — keyword search over the last 48 hours (up to 20 articles)
-  2. RSS feeds — CISA, KrebsOnSecurity, Mandiant (always included)
+All sources are hand-curated for authority and signal quality:
+  - Government primary sources (CISA, Singapore CSA, ENISA)
+  - Tier-1 threat intelligence (Mandiant, Recorded Future, Talos, Unit 42)
+  - Authoritative security journalism (Krebs, SecurityWeek, THN, Bleeping Computer, The Record)
 
-Results are deduplicated by URL, filtered against each user's seen_articles,
-and returned as a list of article dicts that the brief generator can consume.
+Results are deduplicated by URL, filtered to the last 48 hours, and returned
+as a list of article dicts that the brief generator can consume.
 """
 
 import logging
@@ -24,17 +25,22 @@ logger = logging.getLogger(__name__)
 # Constants
 # ---------------------------------------------------------------------------
 
-NEWSAPI_ENDPOINT = "https://newsapi.org/v2/everything"
-NEWSAPI_KEYWORDS = (
-    'cybersecurity OR "cyber attack" OR "AI governance" OR "supply chain" '
-    'OR CISA OR "threat intelligence"'
-)
-NEWSAPI_MAX_RESULTS = 20
-
 RSS_FEEDS = {
-    "CISA": "https://www.cisa.gov/cybersecurity-advisories/all.xml",
-    "KrebsOnSecurity": "https://krebsonsecurity.com/feed/",
-    "Mandiant": "https://www.mandiant.com/resources/blog/rss.xml",
+    # Government primary sources
+    "CISA":           "https://www.cisa.gov/cybersecurity-advisories/all.xml",
+    "Singapore CSA":  "https://www.csa.gov.sg/rss/alerts-advisories",
+    "ENISA":          "https://www.enisa.europa.eu/topics/enisa-news/rss-feed",
+    # Tier-1 threat intelligence
+    "Mandiant":       "https://www.mandiant.com/resources/blog/rss.xml",
+    "Recorded Future":"https://www.recordedfuture.com/feed",
+    "Cisco Talos":    "https://blog.talosintelligence.com/feeds/posts/default",
+    "Unit 42":        "https://unit42.paloaltonetworks.com/feed/",
+    # Authoritative security journalism
+    "KrebsOnSecurity":"https://krebsonsecurity.com/feed/",
+    "SecurityWeek":   "https://www.securityweek.com/feed/",
+    "The Hacker News":"https://feeds.feedburner.com/TheHackersNews",
+    "Bleeping Computer": "https://www.bleepingcomputer.com/feed/",
+    "The Record":     "https://therecord.media/feed",
 }
 
 # Articles older than this are ignored
@@ -82,66 +88,10 @@ def _parse_feedparser_entry(entry, source_name: str) -> dict:
 # Public API
 # ---------------------------------------------------------------------------
 
-def fetch_newsapi_articles(api_key: str) -> list[dict]:
-    """
-    Query NewsAPI for recent cybersecurity articles.
-    Returns a list of article dicts; empty list on error.
-    """
-    from_date = (datetime.now(timezone.utc) - timedelta(hours=MAX_AGE_HOURS)).strftime(
-        "%Y-%m-%dT%H:%M:%SZ"
-    )
-    params = {
-        "q": NEWSAPI_KEYWORDS,
-        "from": from_date,
-        "sortBy": "publishedAt",
-        "pageSize": NEWSAPI_MAX_RESULTS,
-        "language": "en",
-        "apiKey": api_key,
-    }
-    try:
-        resp = requests.get(NEWSAPI_ENDPOINT, params=params, timeout=REQUEST_TIMEOUT)
-        resp.raise_for_status()
-        data = resp.json()
-    except Exception as exc:
-        logger.error("NewsAPI fetch failed: %s", exc)
-        return []
-
-    articles = []
-    for item in data.get("articles", []):
-        url = item.get("url", "")
-        if not url:
-            continue
-
-        published_at = None
-        raw_date = item.get("publishedAt")
-        if raw_date:
-            try:
-                published_at = datetime.fromisoformat(raw_date.replace("Z", "+00:00"))
-            except ValueError:
-                pass
-
-        if not _is_recent(published_at):
-            continue
-
-        articles.append(
-            {
-                "title": item.get("title") or "No title",
-                "url": url,
-                "source": item.get("source", {}).get("name") or "NewsAPI",
-                "published_at": published_at,
-                "summary": (item.get("description") or "")[:500],
-            }
-        )
-
-    logger.info("NewsAPI returned %d recent articles", len(articles))
-    return articles
-
-
 def fetch_rss_articles() -> list[dict]:
     """
-    Fetch articles from the three fixed RSS feeds.
-    Always included regardless of NewsAPI results.
-    Returns a deduplicated list of article dicts.
+    Fetch articles from all authoritative RSS feeds.
+    Returns a list of article dicts (not yet deduplicated).
     """
     articles = []
     for source_name, feed_url in RSS_FEEDS.items():
@@ -170,7 +120,7 @@ def fetch_rss_articles() -> list[dict]:
 
 
 def deduplicate(articles: list[dict]) -> list[dict]:
-    """Remove duplicate URLs, keeping first occurrence (NewsAPI priority)."""
+    """Remove duplicate URLs, keeping first occurrence."""
     seen_urls: set[str] = set()
     unique = []
     for article in articles:
@@ -181,25 +131,15 @@ def deduplicate(articles: list[dict]) -> list[dict]:
     return unique
 
 
-def fetch_all_articles(api_key: str) -> list[dict]:
+def fetch_all_articles() -> list[dict]:
     """
-    Main entry point.  Merges NewsAPI + RSS, deduplicates by URL.
+    Main entry point. Fetches from all RSS feeds, deduplicates by URL.
     Does NOT filter against per-user seen_articles — that happens in
     brief_generator.py after we know which user we're generating for.
     """
-    newsapi_articles = fetch_newsapi_articles(api_key)
     rss_articles = fetch_rss_articles()
-
-    # RSS feeds come after NewsAPI so NewsAPI wins on URL conflicts
-    combined = newsapi_articles + rss_articles
-    unique = deduplicate(combined)
-
-    logger.info(
-        "Total unique articles after merge: %d (NewsAPI=%d, RSS=%d)",
-        len(unique),
-        len(newsapi_articles),
-        len(rss_articles),
-    )
+    unique = deduplicate(rss_articles)
+    logger.info("Total unique articles after dedup: %d", len(unique))
     return unique
 
 

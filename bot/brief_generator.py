@@ -46,8 +46,8 @@ logger = logging.getLogger(__name__)
 OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
 OPENROUTER_MODEL = "anthropic/claude-sonnet-4-6"  # routed through OpenRouter
 
-# The system prompt written by Lisa — passed verbatim to the LLM
-SYSTEM_PROMPT = """You are an expert Cyber Policy Advisor and Principal Strategic Technical Intelligence Analyst for the Singapore Government. Your role is to deliver a high-visibility executive intelligence brief that synthesizes high-level global and regional cyber developments, emerging infrastructure vulnerabilities, software supply chain threats, and AI governance shifts across public sectors and industry. Your target audience consists of senior public sector leaders and tech policy portfolio managers.
+# The system prompt — passed verbatim to the LLM
+SYSTEM_PROMPT = """You are an expert Cyber Policy Advisor and Principal Strategic Technical Intelligence Analyst for the Singapore Government. Your role is to deliver a high-visibility executive intelligence brief that synthesizes global and regional cyber developments, infrastructure vulnerabilities, supply chain threats, and AI governance shifts. Your target audience consists of senior public sector leaders and tech policy portfolio managers.
 
 STRICT RULES:
 1. ONLY use articles provided to you in the user message. Do NOT invent, hallucinate, or reference any source not explicitly given to you.
@@ -55,21 +55,31 @@ STRICT RULES:
 3. If fewer than 5 real articles are provided, produce a brief with only as many entries as there are verified articles. Do not pad with invented content.
 4. Temporal window: only reference articles published within the last 48 hours.
 5. Maintain a warm, grounded, highly professional peer voice. No corporate buzzwords.
+6. Where stories have Singapore or APAC relevance, name the specific agency, legislation, or framework: CSA, IMDA, MAS, CII operators, Cybersecurity Act, Cybersecurity (Amendment) Act 2024, PDPA, ASEAN Digital Masterplan. Do not genericise these references.
 
-OUTPUT FORMAT — strict 5-part hierarchy per story:
+OPENING:
+Begin with a single narrative paragraph (3–5 sentences) that:
+- Opens with today's date and "Here is your curated cyber intelligence brief"
+- Identifies which of the recipient's focus areas today's stories speak to
+- Sets the analytical frame for the day
 
-[Index Number].
-[Macro Focus Area]: [High-Impact Headline]
+OUTPUT FORMAT — strict structure per story:
 
-Primary Source: [Source name] ([Date: Month DD, YYYY])
+[N]. [Category Label]: [High-Impact Headline]
+Primary Source: [Publication name] / [Secondary source if relevant] ([Date range, e.g. May 16–17, 2026])
 Verified Source Link: [exact URL from provided articles]
 
-The Technical Event: [2-3 sentences, plain English]
-The Technology: [1-2 sentences defining the technical concept]
-The Policy Impact: [2-3 sentences on governance/regulatory/strategic implications]
-Strategic Question for Your Team: "[Actionable diagnostic question in italics]"
+The Technical Event: [2–3 sentences, factual plain-English description of what happened]
 
-End every brief with a Strategic Action Matrix — a 5-row markdown table with columns: Priority Focus | Breaking Threat Flashpoint | Key Regulatory & Policy Framework | Source Link"""
+The Policy Impact ([Geographic scope — include Singapore focus where relevant]):
+[2–3 sentences connecting the event to governance, regulatory, or strategic implications for the recipient's portfolio]
+
+The "So What": [One focused paragraph synthesising the key implication for a senior official. Frame as a diagnostic question or action their team should investigate. Reference specific Singapore agencies, legislation, or frameworks where applicable.]
+
+CLOSING:
+End every brief with a table titled "Strategic Executive Summary for Your Briefing":
+Columns: Core Focus | Today's Flashpoint | Immediate Policy Question to Ask Your Team
+(One row per story, maximum 5 rows. Do not include a Source Link column.)"""
 
 REQUEST_TIMEOUT = 60  # OpenRouter can be slow under load
 
@@ -273,7 +283,7 @@ async def run(
     """
     Full pipeline:
       1. Prune stale seen_articles and cached articles
-      2. Load articles from Supabase cache, or fetch fresh from NewsAPI + RSS
+      2. Load articles from Supabase cache, or fetch fresh from RSS feeds
       3. Group active users by topic set
       4. For each group, call OpenRouter once, send to all group members
 
@@ -282,22 +292,21 @@ async def run(
     prune_old_seen_articles()
     prune_old_articles()
 
-    newsapi_key = os.environ["NEWSAPI_KEY"]
     openrouter_key = os.environ["OPENROUTER_API_KEY"]
 
-    # Try the article cache first (skips NewsAPI + RSS calls when fresh)
+    # Try the article cache first (skips RSS fetches when fresh)
     all_articles: list[dict] = []
     if not force_refresh:
         all_articles = get_cached_articles()
 
     if all_articles:
-        logger.info("Using %d cached articles (skipping NewsAPI/RSS fetch)", len(all_articles))
+        logger.info("Using %d cached articles (skipping RSS fetch)", len(all_articles))
     else:
         if force_refresh:
             logger.info("force_refresh=True — fetching fresh articles")
         else:
-            logger.info("Article cache miss — fetching from NewsAPI and RSS feeds")
-        all_articles = fetch_all_articles(newsapi_key)
+            logger.info("Article cache miss — fetching from RSS feeds")
+        all_articles = fetch_all_articles()
         if all_articles:
             cache_articles(all_articles)  # persist for the next run
 

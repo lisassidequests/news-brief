@@ -36,6 +36,5 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN:   ${{ secrets.TELEGRAM_BOT_TOKEN }}
           OPENROUTER_API_KEY:   ${{ secrets.OPENROUTER_API_KEY }}
-          NEWSAPI_KEY:          ${{ secrets.NEWSAPI_KEY }}
           SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
