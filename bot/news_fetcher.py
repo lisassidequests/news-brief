@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 RSS_FEEDS = {
     # Government primary sources
     "CISA":           "https://www.cisa.gov/cybersecurity-advisories/all.xml",
-    "Singapore CSA":  "https://www.csa.gov.sg/rss/alerts-advisories",
+    "Singapore CSA":  "https://www.csa.gov.sg/alerts-and-advisories/",
     "ENISA":          "https://www.enisa.europa.eu/topics/enisa-news/rss-feed",
     # Tier-1 threat intelligence
     "Mandiant":       "https://www.mandiant.com/resources/blog/rss.xml",
