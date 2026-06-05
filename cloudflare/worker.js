@@ -93,7 +93,7 @@ async function handleMessage(message, env) {
       await handleBrief(message, env, "tldr", false);
       break;
     case "/preview":
-      await handleBrief(message, env, "full", true);
+      await handleBrief(message, env, null, true);
       break;
     case "/pause":
       await handlePause(message, env);
@@ -375,33 +375,58 @@ async function handleBrief(message, env, format, isPreview) {
     return;
   }
 
-  // Serve from cache for non-preview requests
-  if (!isPreview) {
-    const effectiveFormat = format || user.format || "tldr";
-    const cached = await getBriefCache(telegramId, effectiveFormat, env);
-    if (cached) {
-      await sendBriefChunks(chatId, cached, env);
+  if (isPreview) {
+    if (!user.preferences) {
+      // No customisations saved — explain and fall back to standard brief
+      await sendMessage(
+        chatId,
+        "You haven't set any customisations yet.\n\n" +
+        "To personalise your brief, tap *✏️ Refine* after any brief, or use *Update Preferences* in /settings.\n\n" +
+        "Sending you the standard brief instead…",
+        env
+      );
+      const effectiveFormat = format || user.format || "tldr";
+      const cached = await getBriefCache(telegramId, effectiveFormat, env);
+      if (cached) {
+        await sendBriefChunks(chatId, cached, env);
+      } else {
+        await sendMessage(chatId, "⏳ Generating your brief now… This takes about 30-60 seconds.", env);
+        const triggered = await triggerGitHubWorkflow(telegramId, format, env);
+        if (!triggered) {
+          await sendMessage(chatId, "❌ Failed to trigger brief generation. Please try again in a minute.", env);
+        }
+      }
       return;
     }
-  }
 
-  const prefix = isPreview
-    ? "⚡ *Preview* — your scheduled brief still sends at 8am SGT.\n\n"
-    : "";
-
-  await sendMessage(
-    chatId,
-    `${prefix}⏳ Generating your brief now… This takes about 30-60 seconds.`,
-    env
-  );
-
-  const triggered = await triggerGitHubWorkflow(telegramId, format, env);
-  if (!triggered) {
+    // Has preferences — generate a fresh personalised brief
+    const previewSnippet = user.preferences.length > 120
+      ? user.preferences.slice(0, 120) + "…"
+      : user.preferences;
     await sendMessage(
       chatId,
-      "❌ Failed to trigger brief generation. Please try again in a minute.",
+      `⚡ *Personalised Preview*\n\nApplying your customisations: _"${previewSnippet}"_\n\nGenerating now — this takes about 30-60 seconds.`,
       env
     );
+    const triggered = await triggerGitHubWorkflow(telegramId, format, env);
+    if (!triggered) {
+      await sendMessage(chatId, "❌ Failed to trigger brief generation. Please try again in a minute.", env);
+    }
+    return;
+  }
+
+  // /brief or /tldr — serve from cache first
+  const effectiveFormat = format || user.format || "tldr";
+  const cached = await getBriefCache(telegramId, effectiveFormat, env);
+  if (cached) {
+    await sendBriefChunks(chatId, cached, env);
+    return;
+  }
+
+  await sendMessage(chatId, "⏳ Generating your brief now… This takes about 30-60 seconds.", env);
+  const triggered = await triggerGitHubWorkflow(telegramId, format, env);
+  if (!triggered) {
+    await sendMessage(chatId, "❌ Failed to trigger brief generation. Please try again in a minute.", env);
   }
 }
 
