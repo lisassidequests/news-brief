@@ -26,21 +26,33 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 RSS_FEEDS = {
-    # Government primary sources
-    "CISA":           "https://www.cisa.gov/cybersecurity-advisories/all.xml",
-    "Singapore CSA":  "https://www.csa.gov.sg/alerts-and-advisories/",
-    "ENISA":          "https://www.enisa.europa.eu/topics/enisa-news/rss-feed",
+    # Government primary sources — cybersecurity
+    "CISA":              "https://www.cisa.gov/cybersecurity-advisories/all.xml",
+    "Singapore CSA":     "https://www.csa.gov.sg/alerts-and-advisories/",
+    "ENISA":             "https://www.enisa.europa.eu/topics/enisa-news/rss-feed",
     # Tier-1 threat intelligence
-    "Mandiant":       "https://www.mandiant.com/resources/blog/rss.xml",
-    "Recorded Future":"https://www.recordedfuture.com/feed",
-    "Cisco Talos":    "https://blog.talosintelligence.com/feeds/posts/default",
-    "Unit 42":        "https://unit42.paloaltonetworks.com/feed/",
+    "Mandiant":          "https://www.mandiant.com/resources/blog/rss.xml",
+    "Recorded Future":   "https://www.recordedfuture.com/feed",
+    "Cisco Talos":       "https://blog.talosintelligence.com/feeds/posts/default",
+    "Unit 42":           "https://unit42.paloaltonetworks.com/feed/",
     # Authoritative security journalism
-    "KrebsOnSecurity":"https://krebsonsecurity.com/feed/",
-    "SecurityWeek":   "https://www.securityweek.com/feed/",
-    "The Hacker News":"https://feeds.feedburner.com/TheHackersNews",
+    "KrebsOnSecurity":   "https://krebsonsecurity.com/feed/",
+    "SecurityWeek":      "https://www.securityweek.com/feed/",
+    "The Hacker News":   "https://feeds.feedburner.com/TheHackersNews",
     "Bleeping Computer": "https://www.bleepingcomputer.com/feed/",
-    "The Record":     "https://therecord.media/feed",
+    "The Record":        "https://therecord.media/feed",
+    # AI news
+    "Financial Times Tech":     "https://www.ft.com/technology?format=rss",
+    "MIT Technology Review AI": "https://www.technologyreview.com/topic/artificial-intelligence/feed/",
+    "Semafor Technology":       "https://www.semafor.com/feed/technology",
+    # AI policy & governance research
+    "Stanford HAI":      "https://hai.stanford.edu/news/feed",
+    "CSET":              "https://cset.georgetown.edu/feed/",
+    "OECD AI":           "https://oecd.ai/en/feed",
+    # Singapore & EU AI governance
+    "IMDA":              "https://www.imda.gov.sg/resources/press-releases-factsheets-and-speeches",
+    "AI Verify Foundation": "https://aiverify.sg/",
+    "EU AI Office":      "https://digital-strategy.ec.europa.eu/en/policies/artificial-intelligence",
 }
 
 # Articles older than this are ignored

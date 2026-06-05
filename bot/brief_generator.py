@@ -222,21 +222,33 @@ def apply_format(full_brief: str, fmt: str) -> str:
 # ---------------------------------------------------------------------------
 
 _SOURCE_TIER: dict[str, int] = {
-    # Government primary sources (highest authority)
+    # Government primary sources — cybersecurity
     "CISA":             30,
     "Singapore CSA":    30,
     "ENISA":            30,
+    # Singapore & EU AI governance (primary sources)
+    "IMDA":             30,
+    "AI Verify Foundation": 30,
+    "EU AI Office":     30,
     # Tier-1 threat intelligence
     "Mandiant":         20,
     "Recorded Future":  20,
     "Cisco Talos":      20,
     "Unit 42":          20,
+    # AI policy & governance research
+    "Stanford HAI":     20,
+    "CSET":             20,
+    "OECD AI":          20,
     # Authoritative security journalism
     "KrebsOnSecurity":  10,
     "SecurityWeek":     10,
     "The Hacker News":  10,
     "Bleeping Computer": 10,
     "The Record":       10,
+    # AI news
+    "Financial Times Tech":     10,
+    "MIT Technology Review AI": 10,
+    "Semafor Technology":       10,
 }
 
 
