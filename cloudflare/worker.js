@@ -253,7 +253,7 @@ async function handleCallbackQuery(callbackQuery, env) {
     await updateUser(telegramId, { format: fmt, onboarding_step: "awaiting_topics" }, env);
     await sendMessage(
       chatId,
-      `✅ Format set to *${fmt.toUpperCase()}*.\n\nWhat topics interest you most? Reply with a comma-separated list.\n\n_Examples: CISA, ransomware, AI governance, supply chain, Singapore_\n\n(Or type "all" for everything)`,
+      `✅ Format set to *${fmt.toUpperCase()}*.\n\nYour brief covers both *cybersecurity* and *AI governance* by default.\n\nAre there specific focus areas you'd like emphasised? Reply with a comma-separated list, or type "all" to keep broad coverage.\n\n_Examples: CISA advisories, ransomware, AI regulation, supply chain, Singapore, critical infrastructure_`,
       env
     );
   } else if (data === "pause:confirm") {
@@ -271,9 +271,9 @@ async function handleCallbackQuery(callbackQuery, env) {
     await updateUser(telegramId, { onboarding_step: "awaiting_topics" }, env);
     await sendMessage(
       chatId,
-      "What topics would you like to follow? Reply with a comma-separated list.\n\n" +
-      "_Example: CISA, ransomware, AI governance, supply chain, Singapore_\n\n" +
-      "(Or type \"all\" for everything)",
+      "Your brief covers both *cybersecurity* and *AI governance* by default.\n\n" +
+      "Are there specific areas you'd like emphasised? Reply with a comma-separated list, or type \"all\" for broad coverage.\n\n" +
+      "_Examples: CISA advisories, ransomware, AI regulation, supply chain, Singapore, critical infrastructure_",
       env
     );
   } else if (data === "set:prefs") {

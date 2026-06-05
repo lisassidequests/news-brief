@@ -398,25 +398,11 @@ async def run(
         group = list(group_iter)
         topics = json.loads(topic_key)
 
-        # Filter articles to those relevant to this group's topics
-        # If the user has no topics specified, use all articles
-        if topics:
-            relevant = [
-                a for a in all_articles
-                if any(
-                    t.lower() in (a["title"] + " " + a.get("summary", "")).lower()
-                    for t in topics
-                )
-            ]
-            # Fall back to all articles if topic filter leaves nothing
-            if not relevant:
-                relevant = all_articles
-        else:
-            relevant = all_articles
-
-        # Prioritize and cap: TL;DR uses top 5, other formats use top 20
+        # All articles are candidates — topics add scoring bonus only, not hard filter.
+        # This ensures every user always sees coverage across both cybersecurity and AI
+        # regardless of how narrowly they've defined their topics.
         article_limit = 5 if format_override == "tldr" else 20
-        relevant = _prioritize_articles(relevant, topics, article_limit)
+        relevant = _prioritize_articles(all_articles, topics, article_limit)
 
         logger.info(
             "Topic group %r: %d users, %d articles → calling OpenRouter",
