@@ -456,12 +456,27 @@ async def run(
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
+    import argparse as _argparse
+
+    def _telegram_id(value: str) -> int:
+        if value.startswith("@"):
+            raise _argparse.ArgumentTypeError(
+                f"{value!r} is a username — use the numeric Telegram user ID instead. "
+                "Find it via @userinfobot or the /users admin command."
+            )
+        try:
+            return int(value)
+        except ValueError:
+            raise _argparse.ArgumentTypeError(
+                f"{value!r} is not a valid Telegram user ID (must be a plain integer)"
+            )
+
     parser = argparse.ArgumentParser(description="Cyber Intel Brief Generator")
     parser.add_argument(
         "--user",
-        type=int,
+        type=_telegram_id,
         default=None,
-        help="Telegram user ID to send brief to (omit for all active users)",
+        help="Numeric Telegram user ID (e.g. 254816375). Use /users admin command to look up IDs.",
     )
     parser.add_argument(
         "--force-refresh",

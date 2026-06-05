@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       telegram_id:
-        description: "Telegram user ID to send the brief to"
+        description: "Numeric Telegram user ID (e.g. 254816375) — NOT a @username. Use the /users admin command in the bot to look up IDs."
         required: true
         type: string
       format:
