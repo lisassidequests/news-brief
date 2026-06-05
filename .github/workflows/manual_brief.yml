@@ -10,6 +10,11 @@ on:
         description: "Telegram user ID to send the brief to"
         required: true
         type: string
+      format:
+        description: "Format override: full, tldr, or links (omit to use user's stored format)"
+        required: false
+        type: string
+        default: ""
 
 jobs:
   send-brief:
@@ -31,8 +36,12 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run brief generator (single user)
-        # Pass --user so brief_generator.py targets only this Telegram ID
-        run: python bot/brief_generator.py --user ${{ inputs.telegram_id }}
+        run: |
+          ARGS="--user ${{ inputs.telegram_id }}"
+          if [ -n "${{ inputs.format }}" ]; then
+            ARGS="$ARGS --format ${{ inputs.format }}"
+          fi
+          python bot/brief_generator.py $ARGS
         env:
           TELEGRAM_BOT_TOKEN:   ${{ secrets.TELEGRAM_BOT_TOKEN }}
           OPENROUTER_API_KEY:   ${{ secrets.OPENROUTER_API_KEY }}

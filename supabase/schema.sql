@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS users (
     name            TEXT NOT NULL,               -- Display name supplied during onboarding
     timezone        TEXT NOT NULL DEFAULT 'Asia/Singapore',
     delivery_time   TIME NOT NULL DEFAULT '08:00:00',
-    format          delivery_format NOT NULL DEFAULT 'full',
+    format          delivery_format NOT NULL DEFAULT 'tldr',
     topics          JSONB NOT NULL DEFAULT '[]', -- e.g. ["CISA","supply chain","AI governance"]
     is_active       BOOLEAN NOT NULL DEFAULT TRUE,
     is_admin        BOOLEAN NOT NULL DEFAULT FALSE,

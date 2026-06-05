@@ -162,63 +162,57 @@ def apply_format(full_brief: str, fmt: str) -> str:
     Transform the full brief into the user's preferred format.
 
     'full'  — return as-is
-    'tldr'  — keep only the headline + Policy Impact per story, plus Action Matrix
-    'links' — keep only headline + URL per story, plus Action Matrix
+    'tldr'  — opening paragraph + headline + source + Policy Impact per story
+    'links' — opening paragraph + headline + article link per story
     """
+    import re as _re
+
     if fmt == "full":
         return full_brief
 
     lines = full_brief.split("\n")
-    output_lines = []
+
+    # Find where the first numbered story begins (*1. … or 1. …)
+    first_story_idx = next(
+        (i for i, l in enumerate(lines) if _re.match(r"^\*?\d+\.", l.strip())),
+        len(lines),
+    )
+
+    # Always keep the opening narrative paragraph
+    output_lines = list(lines[:first_story_idx])
 
     if fmt == "tldr":
-        # Keep lines that are a story header (start with a digit + '.'),
-        # Policy Impact lines, and the Strategic Action Matrix block.
-        in_matrix = False
-        capture_policy = False
-        for line in lines:
+        in_policy = False
+        for line in lines[first_story_idx:]:
             stripped = line.strip()
-            if "Strategic Action Matrix" in stripped:
-                in_matrix = True
-            if in_matrix:
+            if _re.match(r"^\*?\d+\.", stripped):
+                output_lines.append("")
                 output_lines.append(line)
-                continue
-            # Story index line e.g. "1."
-            if stripped and stripped[0].isdigit() and stripped.endswith("."):
+                in_policy = False
+            elif stripped.startswith("_Primary Source"):
                 output_lines.append(line)
-                capture_policy = False
-                continue
-            # Macro focus headline line (contains ": ")
-            if "]: [" in stripped or (stripped and stripped[0] == "["):
+            elif stripped.startswith("[Read the full article]"):
                 output_lines.append(line)
-                continue
-            if stripped.startswith("The Policy Impact:"):
-                capture_policy = True
-            if capture_policy:
+            elif "Policy Impact" in stripped:
+                in_policy = True
                 output_lines.append(line)
-                # Stop capturing after the policy block ends (empty line follows)
-                if stripped == "" and capture_policy:
-                    capture_policy = False
+            elif in_policy:
+                # Next bold section label ends the policy block
+                if stripped.startswith("*The "):
+                    in_policy = False
+                else:
+                    output_lines.append(line)
 
     elif fmt == "links":
-        in_matrix = False
-        for line in lines:
+        for line in lines[first_story_idx:]:
             stripped = line.strip()
-            if "Strategic Action Matrix" in stripped:
-                in_matrix = True
-            if in_matrix:
+            if _re.match(r"^\*?\d+\.", stripped):
+                output_lines.append("")
                 output_lines.append(line)
-                continue
-            # Keep story headline lines and verified URL lines only
-            if stripped and stripped[0].isdigit() and stripped.endswith("."):
+            elif stripped.startswith("[Read the full article]"):
                 output_lines.append(line)
-            elif "]: [" in stripped or (stripped and stripped[0] == "[" and "Headline" not in stripped):
-                output_lines.append(line)
-            elif stripped.startswith("Verified Source Link:"):
-                output_lines.append(line)
-                output_lines.append("")  # blank line separator
 
-    return "\n".join(output_lines)
+    return "\n".join(output_lines).strip()
 
 
 # ---------------------------------------------------------------------------
@@ -241,10 +235,11 @@ async def process_user(
     user: dict,
     brief_text: str,
     article_urls: list[str],
+    format_override: Optional[str] = None,
 ) -> None:
     """Send the brief to one user, then record state in Supabase."""
     telegram_id = user["telegram_id"]
-    fmt = user.get("format", "full")
+    fmt = format_override or user.get("format", "tldr")
     formatted_brief = apply_format(brief_text, fmt)
 
     try:
@@ -274,6 +269,7 @@ async def process_user(
 async def run(
     target_telegram_id: Optional[int] = None,
     force_refresh: bool = False,
+    format_override: Optional[str] = None,
 ) -> None:
     """
     Full pipeline:
@@ -372,7 +368,8 @@ async def run(
                 for user in users_no_prefs:
                     seen = get_seen_urls(user["telegram_id"])
                     tasks.append(process_user(user, brief_text,
-                                              [u for u in article_urls if u not in seen]))
+                                              [u for u in article_urls if u not in seen],
+                                              format_override))
             else:
                 for user in users_no_prefs:
                     log_delivery(user_id=user["telegram_id"], status="failed",
@@ -411,8 +408,18 @@ if __name__ == "__main__":
         "--force-refresh",
         action="store_true",
         default=False,
-        help="Bypass the Supabase article cache and re-fetch from NewsAPI/RSS",
+        help="Bypass the Supabase article cache and re-fetch from RSS feeds",
+    )
+    parser.add_argument(
+        "--format",
+        choices=["full", "tldr", "links"],
+        default=None,
+        help="Override format for this run (default: use each user's stored format)",
     )
     args = parser.parse_args()
 
-    asyncio.run(run(target_telegram_id=args.user, force_refresh=args.force_refresh))
+    asyncio.run(run(
+        target_telegram_id=args.user,
+        force_refresh=args.force_refresh,
+        format_override=args.format,
+    ))

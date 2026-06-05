@@ -87,10 +87,13 @@ async function handleMessage(message, env) {
       await handleSettings(message, env);
       break;
     case "/brief":
-      await handleBrief(message, env, false);
+      await handleBrief(message, env, "full", false);
+      break;
+    case "/tldr":
+      await handleBrief(message, env, "tldr", false);
       break;
     case "/preview":
-      await handleBrief(message, env, true);
+      await handleBrief(message, env, "full", true);
       break;
     case "/pause":
       await handlePause(message, env);
@@ -109,7 +112,7 @@ async function handleMessage(message, env) {
       await handleAdminBroadcast(message, args, env);
       break;
     default:
-      await sendMessage(chatId, "Unknown command. Try /start, /brief, /settings, /pause, or /resume.", env);
+      await sendMessage(chatId, "Unknown command. Try /start, /brief, /tldr, /settings, /pause, or /resume.", env);
   }
 }
 
@@ -350,7 +353,7 @@ async function handleSettingsUpdate(message, user, env) {
 // /brief and /preview — trigger GitHub Actions workflow_dispatch
 // =============================================================================
 
-async function handleBrief(message, env, isPreview) {
+async function handleBrief(message, env, format, isPreview) {
   const chatId = message.chat.id;
   const telegramId = message.from.id;
 
@@ -370,8 +373,7 @@ async function handleBrief(message, env, isPreview) {
     env
   );
 
-  // Trigger the manual_brief workflow on GitHub Actions
-  const triggered = await triggerGitHubWorkflow(telegramId, env);
+  const triggered = await triggerGitHubWorkflow(telegramId, format, env);
   if (!triggered) {
     await sendMessage(
       chatId,
@@ -498,12 +500,15 @@ async function handleAdminBroadcast(message, text, env) {
 // GitHub Actions workflow_dispatch trigger
 // =============================================================================
 
-async function triggerGitHubWorkflow(telegramId, env) {
+async function triggerGitHubWorkflow(telegramId, format, env) {
   const url = `https://api.github.com/repos/${env.GITHUB_REPO_OWNER}/${env.GITHUB_REPO_NAME}/actions/workflows/manual_brief.yml/dispatches`;
+
+  const inputs = { telegram_id: String(telegramId) };
+  if (format) inputs.format = format;
 
   const body = {
     ref: env.GITHUB_REF || "main",
-    inputs: { telegram_id: String(telegramId) },
+    inputs,
   };
 
   try {
@@ -536,12 +541,14 @@ async function triggerGitHubWorkflow(telegramId, env) {
 
 async function supabaseRequest(method, path, body, env) {
   const url = `${env.SUPABASE_URL}/rest/v1/${path}`;
+  const prefer = path.includes("on_conflict")
+    ? "resolution=merge-duplicates,return=representation"
+    : "return=representation";
   const headers = {
     apikey: env.SUPABASE_SERVICE_KEY,
     Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
     "Content-Type": "application/json",
-    // Return the full object on insert/upsert
-    Prefer: "return=representation",
+    Prefer: prefer,
   };
 
   const resp = await fetch(url, {
