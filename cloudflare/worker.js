@@ -534,7 +534,11 @@ async function triggerGitHubWorkflow(telegramId, env) {
     });
 
     // GitHub returns 204 No Content on success
-    return resp.status === 204;
+    if (resp.status === 204) return true;
+
+    const responseText = await resp.text();
+    console.error(`GitHub dispatch failed: HTTP ${resp.status} — ${responseText}`);
+    return false;
   } catch (err) {
     console.error("GitHub workflow dispatch failed:", err);
     return false;
