@@ -459,6 +459,13 @@ async function sendBriefChunks(chatId, briefText, env) {
   if (!chunks.length) return;
   chunks[0] = header + chunks[0];
 
+  // Send headline index first so users can scan all stories at a glance
+  const index = buildIndexMessage(briefText);
+  if (index) {
+    await sendMessage(chatId, index, env);
+    await sleep(1000);
+  }
+
   for (let i = 0; i < chunks.length; i++) {
     await sendMessage(chatId, chunks[i], env);
     if (i < chunks.length - 1) await sleep(1000);
@@ -758,6 +765,25 @@ async function answerCallbackQuery(callbackQueryId, env) {
 // =============================================================================
 // Utility
 // =============================================================================
+
+function buildIndexMessage(briefText) {
+  const lines = briefText.split("\n");
+  const entries = [];
+  let currentHeadline = null;
+
+  for (const line of lines) {
+    const stripped = line.trim();
+    if (/^\*?\d+\.[ \t]/.test(stripped)) {
+      currentHeadline = line.trimEnd();
+    } else if (stripped.startsWith("[Read the full article]") && currentHeadline) {
+      entries.push(`${currentHeadline}\n${stripped}`);
+      currentHeadline = null;
+    }
+  }
+
+  if (!entries.length) return null;
+  return "📋 *Today's Headlines*\n\n" + entries.join("\n\n");
+}
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));

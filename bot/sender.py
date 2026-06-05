@@ -77,6 +77,28 @@ def _split_brief_into_chunks(brief_text: str) -> list[str]:
     return chunks
 
 
+def _build_index_message(brief_text: str) -> str:
+    """
+    Build a single quick-reference message: all numbered headlines + article
+    links from the brief, in one block. Sent before the detailed story chunks.
+    """
+    lines = brief_text.split("\n")
+    entries = []
+    current_headline: str | None = None
+
+    for line in lines:
+        stripped = line.strip()
+        if re.match(r"^\*?\d+\.[ \t]", stripped):
+            current_headline = line.rstrip()
+        elif stripped.startswith("[Read the full article]") and current_headline:
+            entries.append(f"{current_headline}\n{stripped}")
+            current_headline = None
+
+    if not entries:
+        return ""
+    return "📋 *Today's Headlines*\n\n" + "\n\n".join(entries)
+
+
 async def send_brief(telegram_id: int, brief_text: str, bot_token: str) -> None:
     """
     Send the full brief to `telegram_id`, chunked into multiple messages.
@@ -96,6 +118,17 @@ async def send_brief(telegram_id: int, brief_text: str, bot_token: str) -> None:
     chunks[0] = header + chunks[0]
 
     async with bot:
+        # Send the headline index first so users can scan all stories at a glance
+        index = _build_index_message(brief_text)
+        if index:
+            await bot.send_message(
+                chat_id=telegram_id,
+                text=index,
+                parse_mode="Markdown",
+                disable_web_page_preview=True,
+            )
+            await asyncio.sleep(SEND_DELAY_SECONDS)
+
         for i, chunk in enumerate(chunks):
             try:
                 await bot.send_message(
