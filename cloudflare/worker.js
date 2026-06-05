@@ -245,8 +245,11 @@ async function handleCallbackQuery(callbackQuery, env) {
   const telegramId = callbackQuery.from.id;
   const data = callbackQuery.data || "";
 
-  // Always acknowledge the callback to stop Telegram's loading spinner
-  await answerCallbackQuery(callbackQuery.id, env);
+  // Acknowledge the callback to stop Telegram's loading spinner.
+  // Non-fatal — a failure here must not block the response.
+  try { await answerCallbackQuery(callbackQuery.id, env); } catch {}
+
+  try {
 
   if (data.startsWith("fmt:")) {
     const fmt = data.slice(4); // "full", "tldr", or "links"
@@ -309,6 +312,11 @@ async function handleCallbackQuery(callbackQuery, env) {
       `What would make your brief better?${current}\n\n` +
       `_New text is added to your existing note. Reply "clear" to reset._`,
       env);
+  }
+
+  } catch (err) {
+    console.error("Callback handler error for data=", data, err);
+    try { await sendMessage(chatId, "Something went wrong — please try again.", env); } catch {}
   }
 }
 
