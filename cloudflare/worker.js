@@ -218,12 +218,6 @@ async function handleFreeText(message, env) {
       break;
     }
 
-    case "awaiting_settings_field": {
-      // User is changing a setting conversationally
-      await handleSettingsUpdate(message, user, env);
-      break;
-    }
-
     case "awaiting_feedback": {
       if (text.trim().toLowerCase() === "clear") {
         await upsertUser({ telegram_id: telegramId, preferences: null, onboarding_step: null }, env);
@@ -271,6 +265,30 @@ async function handleCallbackQuery(callbackQuery, env) {
   } else if (data === "resume:confirm") {
     await setUserActive(telegramId, true, env);
     await sendMessage(chatId, "▶️ Brief delivery resumed! You'll receive your next brief at 8:00 AM SGT.", env);
+  } else if (data.startsWith("set:fmt:")) {
+    const fmt = data.slice(8); // "full", "tldr", or "links"
+    await upsertUser({ telegram_id: telegramId, format: fmt, onboarding_step: null }, env);
+    await sendMessage(chatId, `✅ Format updated to *${fmt.toUpperCase()}*. Generating your updated brief…`, env);
+    await triggerGitHubWorkflow(telegramId, fmt, env);
+  } else if (data === "set:topics") {
+    await upsertUser({ telegram_id: telegramId, onboarding_step: "awaiting_topics" }, env);
+    await sendMessage(
+      chatId,
+      "What topics would you like to follow? Reply with a comma-separated list.\n\n" +
+      "_Example: CISA, ransomware, AI governance, supply chain, Singapore_\n\n" +
+      "(Or type \"all\" for everything)",
+      env
+    );
+  } else if (data === "set:prefs") {
+    const user = await getUser(telegramId, env);
+    const current = user?.preferences ? `\n\nCurrent note: _"${user.preferences}"_` : "";
+    await upsertUser({ telegram_id: telegramId, onboarding_step: "awaiting_feedback" }, env);
+    await sendMessage(
+      chatId,
+      `What would make your brief better?${current}\n\n` +
+      `_New text is added to your existing note. Reply "clear" to reset._`,
+      env
+    );
   } else if (data === "fb:up") {
     await saveFeedback(telegramId, "up", env);
     await sendMessage(chatId, "👍 Thanks — glad it was useful!", env);
@@ -295,7 +313,7 @@ async function handleCallbackQuery(callbackQuery, env) {
 }
 
 // =============================================================================
-// /settings — show current settings and allow changes
+// /settings — show current settings with action buttons
 // =============================================================================
 
 async function handleSettings(message, env) {
@@ -308,59 +326,37 @@ async function handleSettings(message, env) {
     return;
   }
 
-  const topics = Array.isArray(user.topics) ? user.topics : JSON.parse(user.topics || "[]");
-  const statusEmoji = user.is_active ? "✅ Active" : "⏸ Paused";
-
-  await sendMessage(
-    chatId,
-    `⚙️ *Your Current Settings*\n\n` +
-      `👤 Name: ${user.name}\n` +
-      `📋 Format: ${user.format.toUpperCase()}\n` +
-      `🏷 Topics: ${topics.length ? topics.join(", ") : "All"}\n` +
-      `🕗 Delivery: 8:00 AM SGT daily\n` +
-      `📊 Status: ${statusEmoji}\n` +
-      `📝 Preferences: ${user.preferences || "None"}\n\n` +
-      `To change a setting, reply with what you'd like to update.\n` +
-      `_Example: "Change my format to TL;DR" or "Update topics to ransomware, AI"_`,
-    env
-  );
-
-  // Put user into settings-update mode
-  await upsertUser({ telegram_id: telegramId, onboarding_step: "awaiting_settings_field" }, env);
+  await sendSettingsMenu(chatId, telegramId, user, env);
 }
 
-async function handleSettingsUpdate(message, user, env) {
-  const chatId = message.chat.id;
-  const telegramId = message.from.id;
-  const text = (message.text || "").toLowerCase();
+async function sendSettingsMenu(chatId, telegramId, user, env) {
+  const topics = Array.isArray(user.topics) ? user.topics : JSON.parse(user.topics || "[]");
+  const statusEmoji = user.is_active ? "✅ Active" : "⏸ Paused";
+  const fmtLabel = { full: "📄 Full", tldr: "⚡ TL;DR", links: "🔗 Links" }[user.format] || user.format.toUpperCase();
 
-  let updated = false;
-
-  if (text.includes("format") || text.includes("brief")) {
-    const fmt = text.includes("tldr") || text.includes("tl;dr")
-      ? "tldr"
-      : text.includes("links") || text.includes("link")
-      ? "links"
-      : "full";
-    await upsertUser({ telegram_id: telegramId, format: fmt, onboarding_step: null }, env);
-    await sendMessage(chatId, `✅ Format updated to *${fmt.toUpperCase()}*. Generating your updated brief…`, env);
-    await triggerGitHubWorkflow(telegramId, fmt, env);
-    updated = true;
-  } else if (text.includes("topic") || text.includes("interest")) {
-    // Extract everything after the keyword as topics
-    await upsertUser({ telegram_id: telegramId, onboarding_step: "awaiting_topics" }, env);
-    await sendMessage(chatId, "What topics would you like? Reply with a comma-separated list.", env);
-    updated = true;
-  }
-
-  if (!updated) {
-    await upsertUser({ telegram_id: telegramId, onboarding_step: null }, env);
-    await sendMessage(
-      chatId,
-      "I didn't catch that. You can change your *format*, *topics*, or *name*. Use /settings to try again.",
-      env
-    );
-  }
+  await sendMessageWithKeyboard(
+    chatId,
+    `⚙️ *Your Current Settings*\n\n` +
+      `📋 Format: *${fmtLabel}*\n` +
+      `🏷 Topics: ${topics.length ? topics.join(", ") : "All cyber news"}\n` +
+      `🕗 Delivery: 8:00 AM SGT daily\n` +
+      `📊 Status: ${statusEmoji}\n` +
+      `📝 Preferences: ${user.preferences || "None"}`,
+    [
+      [
+        { text: "📄 Full Brief", callback_data: "set:fmt:full" },
+        { text: "⚡ TL;DR",     callback_data: "set:fmt:tldr" },
+        { text: "🔗 Links Only", callback_data: "set:fmt:links" },
+      ],
+      [
+        { text: "🏷 Change Topics",      callback_data: "set:topics" },
+        { text: "📝 Update Preferences", callback_data: "set:prefs" },
+      ],
+    ],
+    env
+  );
+  // Clear any stale onboarding state so free text isn't misinterpreted
+  await upsertUser({ telegram_id: telegramId, onboarding_step: null }, env);
 }
 
 // =============================================================================
