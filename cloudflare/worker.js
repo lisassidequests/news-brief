@@ -120,8 +120,9 @@ async function handleMessage(message, env) {
 async function handleStart(message, env) {
   const chatId = message.chat.id;
   const telegramId = message.from.id;
+  const name = message.from.first_name || "there";
 
-  // Check if user already exists
+  // Check if user already exists and has completed onboarding
   const existing = await getUser(telegramId, env);
   if (existing && !existing.onboarding_step) {
     await sendMessage(
@@ -132,21 +133,28 @@ async function handleStart(message, env) {
     return;
   }
 
-  // Start fresh onboarding — step 1: ask for name
+  // Create/reset user record using Telegram name, skip to format selection
   await upsertUser(
     {
       telegram_id: telegramId,
-      name: message.from.first_name || "Friend",
-      onboarding_step: "awaiting_name",
+      name,
+      onboarding_step: "awaiting_format",
       is_active: true,
       is_admin: false,
     },
     env
   );
 
-  await sendMessage(
+  await sendMessageWithKeyboard(
     chatId,
-    `👋 Welcome to the *Cyber Intel Brief Bot*!\n\nI deliver a daily AI-generated intelligence brief on cybersecurity, AI governance, and supply chain threats.\n\nFirst — what should I call you? (Reply with your preferred name)`,
+    `👋 Hi *${name}*! Welcome to the *Cyber Intel Brief Bot*.\n\nI deliver a daily intelligence brief on cybersecurity, AI governance, and supply chain threats — tailored to your interests.\n\nHow would you like to receive your brief?`,
+    [
+      [
+        { text: "📄 Full Brief", callback_data: "fmt:full" },
+        { text: "⚡ TL;DR", callback_data: "fmt:tldr" },
+        { text: "🔗 Links Only", callback_data: "fmt:links" },
+      ],
+    ],
     env
   );
 }
@@ -168,25 +176,6 @@ async function handleFreeText(message, env) {
   }
 
   switch (user.onboarding_step) {
-    case "awaiting_name": {
-      const name = text.trim().slice(0, 50); // cap length
-      await upsertUser({ telegram_id: telegramId, name, onboarding_step: "awaiting_format" }, env);
-      // Ask for format via inline keyboard
-      await sendMessageWithKeyboard(
-        chatId,
-        `Great, ${name}! 📋\n\nHow would you like to receive your brief?`,
-        [
-          [
-            { text: "📄 Full Brief", callback_data: "fmt:full" },
-            { text: "⚡ TL;DR", callback_data: "fmt:tldr" },
-            { text: "🔗 Links Only", callback_data: "fmt:links" },
-          ],
-        ],
-        env
-      );
-      break;
-    }
-
     case "awaiting_topics": {
       // User typed topics as free text (comma-separated)
       const topics = text
@@ -344,10 +333,6 @@ async function handleSettingsUpdate(message, user, env) {
     // Extract everything after the keyword as topics
     await upsertUser({ telegram_id: telegramId, onboarding_step: "awaiting_topics" }, env);
     await sendMessage(chatId, "What topics would you like? Reply with a comma-separated list.", env);
-    updated = true;
-  } else if (text.includes("name")) {
-    await upsertUser({ telegram_id: telegramId, onboarding_step: "awaiting_name" }, env);
-    await sendMessage(chatId, "What name should I use for you?", env);
     updated = true;
   }
 
