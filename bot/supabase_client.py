@@ -276,12 +276,12 @@ def get_cached_brief(user_id: int, format: str) -> Optional[str]:
             .select("brief_text")
             .eq("user_id", user_id)
             .eq("format", format)
-            .maybe_single()
+            .limit(1)
             .execute()
         )
-        return resp.data["brief_text"] if resp.data else None
+        return resp.data[0]["brief_text"] if resp.data else None
     except Exception as exc:
-        logger.warning("brief_cache read failed (table may not exist yet): %s", exc)
+        logger.warning("brief_cache read failed: %s", exc)
         return None
 
 
