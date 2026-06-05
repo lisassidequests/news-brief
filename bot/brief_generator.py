@@ -74,12 +74,7 @@ _Primary Source: [Publication name] / [Secondary source if relevant] ([Date rang
 *The Policy Impact* _([Geographic scope — include Singapore focus where relevant]):_
 [2–3 sentences connecting the event to governance, regulatory, or strategic implications for the recipient's portfolio]
 
-*The "So What":* [One focused paragraph synthesising the key implication for a senior official. Frame as a diagnostic question or action their team should investigate. Reference specific Singapore agencies, legislation, or frameworks where applicable.]
-
-CLOSING:
-End every brief with a table titled *Strategic Executive Summary for Your Briefing*:
-Columns: Core Focus | Today's Flashpoint | Immediate Policy Question to Ask Your Team
-(One row per story, maximum 5 rows. Do not include a Source Link column.)"""
+*The "So What":* [One focused paragraph synthesising the key implication for a senior official. Frame as a diagnostic question or action their team should investigate. Reference specific Singapore agencies, legislation, or frameworks where applicable.]"""
 
 REQUEST_TIMEOUT = 60  # OpenRouter can be slow under load
 

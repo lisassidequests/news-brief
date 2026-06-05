@@ -51,17 +51,9 @@ def _split_brief_into_chunks(brief_text: str) -> list[str]:
     chunks: list[str] = []
 
     # Split on lines that start a new numbered story (e.g. "*1. Category: Headline*")
-    # or on the Strategic Executive Summary closing table.
     story_pattern = re.compile(r"(?=^\*?\d+\.[ \t])", re.MULTILINE)
-    matrix_pattern = re.compile(r"(?=^\*?Strategic Executive Summary)", re.MULTILINE)
 
-    # First, cut off the Action Matrix
-    matrix_split = matrix_pattern.split(brief_text, maxsplit=1)
-    stories_text = matrix_split[0]
-    matrix_text = matrix_split[1] if len(matrix_split) > 1 else ""
-
-    # Split individual stories
-    story_blocks = story_pattern.split(stories_text)
+    story_blocks = story_pattern.split(brief_text)
     for block in story_blocks:
         block = block.strip()
         if not block:
@@ -79,23 +71,6 @@ def _split_brief_into_chunks(brief_text: str) -> list[str]:
                     current = para
                 else:
                     current = (current + "\n\n" + para) if current else para
-            if current:
-                chunks.append(current.strip())
-
-    if matrix_text.strip():
-        # Action Matrix may itself exceed the limit (unlikely but handled)
-        if len(matrix_text) <= TELEGRAM_MAX_CHARS:
-            chunks.append(matrix_text.strip())
-        else:
-            lines = matrix_text.strip().split("\n")
-            current = ""
-            for line in lines:
-                if len(current) + len(line) + 1 > TELEGRAM_MAX_CHARS:
-                    if current:
-                        chunks.append(current.strip())
-                    current = line
-                else:
-                    current = (current + "\n" + line) if current else line
             if current:
                 chunks.append(current.strip())
 
