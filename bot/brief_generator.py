@@ -227,7 +227,6 @@ _SOURCE_TIER: dict[str, int] = {
     "Singapore CSA":    30,
     "ENISA":            30,
     # Singapore & EU AI governance (primary sources)
-    "IMDA":             30,
     "AI Verify Foundation": 30,
     "EU AI Office":     30,
     # Tier-1 threat intelligence
