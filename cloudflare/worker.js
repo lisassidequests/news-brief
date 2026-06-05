@@ -516,7 +516,7 @@ async function triggerGitHubWorkflow(telegramId, env) {
   const url = `https://api.github.com/repos/${env.GITHUB_REPO_OWNER}/${env.GITHUB_REPO_NAME}/actions/workflows/manual_brief.yml/dispatches`;
 
   const body = {
-    ref: "main",
+    ref: "claude/telegram-cyber-brief-bot-XgjvW",
     inputs: { telegram_id: String(telegramId) },
   };
 
