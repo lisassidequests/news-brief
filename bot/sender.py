@@ -50,10 +50,10 @@ def _split_brief_into_chunks(brief_text: str) -> list[str]:
     """
     chunks: list[str] = []
 
-    # Split on lines that begin a new numbered story (e.g. "1.\n" or "1. ")
-    # or on the Strategic Action Matrix header.
-    story_pattern = re.compile(r"(?=^\d+\.\s*$)", re.MULTILINE)
-    matrix_pattern = re.compile(r"(?=^Strategic Action Matrix)", re.MULTILINE)
+    # Split on lines that start a new numbered story (e.g. "*1. Category: Headline*")
+    # or on the Strategic Executive Summary closing table.
+    story_pattern = re.compile(r"(?=^\*?\d+\.[ \t])", re.MULTILINE)
+    matrix_pattern = re.compile(r"(?=^\*?Strategic Executive Summary)", re.MULTILINE)
 
     # First, cut off the Action Matrix
     matrix_split = matrix_pattern.split(brief_text, maxsplit=1)

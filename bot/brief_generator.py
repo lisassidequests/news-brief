@@ -63,21 +63,21 @@ Begin with a single narrative paragraph (3–5 sentences) that:
 - Identifies which of the recipient's focus areas today's stories speak to
 - Sets the analytical frame for the day
 
-OUTPUT FORMAT — strict structure per story:
+OUTPUT FORMAT — strict structure per story. Use Telegram MarkdownV1 syntax (*bold*, _italic_, [text](url) — NOT **double asterisk**):
 
-[N]. [Category Label]: [High-Impact Headline]
-Primary Source: [Publication name] / [Secondary source if relevant] ([Date range, e.g. May 16–17, 2026])
-Verified Source Link: [exact URL from provided articles]
+*[N]. [Category Label]: [High-Impact Headline]*
+_Primary Source: [Publication name] / [Secondary source if relevant] ([Date range, e.g. May 16–17, 2026])_
+[Read the full article]([exact URL from provided articles])
 
-The Technical Event: [2–3 sentences, factual plain-English description of what happened]
+*The Technical Event:* [2–3 sentences, factual plain-English description of what happened]
 
-The Policy Impact ([Geographic scope — include Singapore focus where relevant]):
+*The Policy Impact* _([Geographic scope — include Singapore focus where relevant]):_
 [2–3 sentences connecting the event to governance, regulatory, or strategic implications for the recipient's portfolio]
 
-The "So What": [One focused paragraph synthesising the key implication for a senior official. Frame as a diagnostic question or action their team should investigate. Reference specific Singapore agencies, legislation, or frameworks where applicable.]
+*The "So What":* [One focused paragraph synthesising the key implication for a senior official. Frame as a diagnostic question or action their team should investigate. Reference specific Singapore agencies, legislation, or frameworks where applicable.]
 
 CLOSING:
-End every brief with a table titled "Strategic Executive Summary for Your Briefing":
+End every brief with a table titled *Strategic Executive Summary for Your Briefing*:
 Columns: Core Focus | Today's Flashpoint | Immediate Policy Question to Ask Your Team
 (One row per story, maximum 5 rows. Do not include a Source Link column.)"""
 
