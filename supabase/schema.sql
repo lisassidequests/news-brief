@@ -63,6 +63,22 @@ CREATE INDEX IF NOT EXISTS idx_delivery_log_user    ON delivery_log (user_id);
 CREATE INDEX IF NOT EXISTS idx_delivery_log_sent_at ON delivery_log (sent_at);
 
 -- ---------------------------------------------------------------------------
+-- TABLE: brief_cache
+-- One row per (user, format). Updated by every successful brief send.
+-- /brief and /tldr read from here first — no LLM call if cache is warm.
+-- Invalidated automatically when the user changes topics or format
+-- (the next workflow run generates a fresh brief and overwrites the row).
+-- To add to an existing deployment, paste only this block.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS brief_cache (
+    user_id      BIGINT NOT NULL REFERENCES users (telegram_id) ON DELETE CASCADE,
+    format       TEXT NOT NULL CHECK (format IN ('full', 'tldr', 'links')),
+    brief_text   TEXT NOT NULL,
+    generated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (user_id, format)
+);
+
+-- ---------------------------------------------------------------------------
 -- TABLE: brief_feedback
 -- Immutable audit trail of user ratings on delivered briefs.
 -- Used for analytics; individual preferences are stored on users.preferences.

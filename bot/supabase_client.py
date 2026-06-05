@@ -261,3 +261,29 @@ def prune_old_articles(max_age_hours: int = 48) -> int:
     deleted = len(resp.data) if resp.data else 0
     logger.info("Pruned %d old articles rows", deleted)
     return deleted
+
+
+# ---------------------------------------------------------------------------
+# Brief cache helpers
+# ---------------------------------------------------------------------------
+
+def get_cached_brief(user_id: int, format: str) -> Optional[str]:
+    """Return cached brief text for (user_id, format), or None if not cached."""
+    resp = (
+        get_client()
+        .table("brief_cache")
+        .select("brief_text")
+        .eq("user_id", user_id)
+        .eq("format", format)
+        .maybe_single()
+        .execute()
+    )
+    return resp.data["brief_text"] if resp.data else None
+
+
+def set_cached_brief(user_id: int, format: str, brief_text: str) -> None:
+    """Upsert the cached brief for (user_id, format)."""
+    get_client().table("brief_cache").upsert(
+        {"user_id": user_id, "format": format, "brief_text": brief_text},
+        on_conflict="user_id,format",
+    ).execute()

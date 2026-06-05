@@ -172,9 +172,21 @@ async function handleFreeText(message, env) {
   const text = message.text || "";
 
   const user = await getUser(telegramId, env);
-  if (!user || !user.onboarding_step) {
-    // Not in onboarding — ignore or prompt
-    await sendMessage(chatId, "Use /start to set up your brief or /brief to get one now.", env);
+  if (!user) {
+    await sendMessage(chatId, "Use /start to set up your brief.", env);
+    return;
+  }
+  if (!user.onboarding_step) {
+    await sendMessage(
+      chatId,
+      "Here's what I can do:\n\n" +
+      "/brief — get your full brief now\n" +
+      "/tldr — get a TL;DR brief now\n" +
+      "/settings — view or change your preferences\n" +
+      "/pause — pause daily delivery\n" +
+      "/resume — resume daily delivery",
+      env
+    );
     return;
   }
 
@@ -199,9 +211,10 @@ async function handleFreeText(message, env) {
           `📋 Format: *${user2.format.toUpperCase()}*\n` +
           `🏷 Topics: ${topics.length ? topics.join(", ") : "All cyber news"}\n` +
           `🕗 Delivery: *8:00 AM SGT* daily\n\n` +
-          `Use /brief anytime for an instant brief, or /settings to change your preferences.`,
+          `Generating your first brief now — it'll arrive in about 60 seconds.`,
         env
       );
+      await triggerGitHubWorkflow(telegramId, user2.format || "tldr", env);
       break;
     }
 
@@ -330,7 +343,8 @@ async function handleSettingsUpdate(message, user, env) {
       ? "links"
       : "full";
     await upsertUser({ telegram_id: telegramId, format: fmt, onboarding_step: null }, env);
-    await sendMessage(chatId, `✅ Format updated to *${fmt.toUpperCase()}*.`, env);
+    await sendMessage(chatId, `✅ Format updated to *${fmt.toUpperCase()}*. Generating your updated brief…`, env);
+    await triggerGitHubWorkflow(telegramId, fmt, env);
     updated = true;
   } else if (text.includes("topic") || text.includes("interest")) {
     // Extract everything after the keyword as topics
@@ -350,7 +364,7 @@ async function handleSettingsUpdate(message, user, env) {
 }
 
 // =============================================================================
-// /brief and /preview — trigger GitHub Actions workflow_dispatch
+// /brief and /preview — check cache, then trigger GitHub Actions if needed
 // =============================================================================
 
 async function handleBrief(message, env, format, isPreview) {
@@ -361,6 +375,16 @@ async function handleBrief(message, env, format, isPreview) {
   if (!user) {
     await sendMessage(chatId, "Run /start first to set up your account.", env);
     return;
+  }
+
+  // Serve from cache for non-preview requests
+  if (!isPreview) {
+    const effectiveFormat = format || user.format || "tldr";
+    const cached = await getBriefCache(telegramId, effectiveFormat, env);
+    if (cached) {
+      await sendBriefChunks(chatId, cached, env);
+      return;
+    }
   }
 
   const prefix = isPreview
@@ -381,6 +405,78 @@ async function handleBrief(message, env, format, isPreview) {
       env
     );
   }
+}
+
+async function getBriefCache(userId, format, env) {
+  try {
+    const data = await supabaseRequest(
+      "GET",
+      `brief_cache?user_id=eq.${userId}&format=eq.${format}&select=brief_text`,
+      null,
+      env
+    );
+    return Array.isArray(data) && data.length > 0 ? data[0].brief_text : null;
+  } catch {
+    return null;
+  }
+}
+
+async function sendBriefChunks(chatId, briefText, env) {
+  const now = new Date();
+  const sgtHour = (now.getUTCHours() + 8) % 24;
+  const sgtMinute = String(now.getUTCMinutes()).padStart(2, "0");
+  const dateStr = now.toLocaleDateString("en-SG", {
+    timeZone: "Asia/Singapore",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+  const header = `🛡 *Cyber Intel Brief — ${dateStr}, ${String(sgtHour).padStart(2, "0")}:${sgtMinute} SGT*\n\n`;
+
+  const TELEGRAM_MAX = 4000;
+
+  // Split on numbered story starts (mirrors sender.py logic)
+  const blocks = briefText.split(/(?=^\*?\d+\.[ \t])/m).filter((b) => b.trim());
+  const chunks = [];
+
+  for (const block of blocks) {
+    const trimmed = block.trim();
+    if (trimmed.length <= TELEGRAM_MAX) {
+      chunks.push(trimmed);
+    } else {
+      const paras = trimmed.split("\n\n");
+      let current = "";
+      for (const para of paras) {
+        if (current.length + para.length + 2 > TELEGRAM_MAX) {
+          if (current) chunks.push(current.trim());
+          current = para;
+        } else {
+          current = current ? current + "\n\n" + para : para;
+        }
+      }
+      if (current) chunks.push(current.trim());
+    }
+  }
+
+  if (!chunks.length) return;
+  chunks[0] = header + chunks[0];
+
+  for (let i = 0; i < chunks.length; i++) {
+    await sendMessage(chatId, chunks[i], env);
+    if (i < chunks.length - 1) await sleep(1000);
+  }
+
+  await sleep(1000);
+  await sendMessageWithKeyboard(
+    chatId,
+    "Was this brief useful?",
+    [[
+      { text: "👍 Useful", callback_data: "fb:up" },
+      { text: "👎 Not useful", callback_data: "fb:down" },
+      { text: "✏️ Refine", callback_data: "fb:refine" },
+    ]],
+    env
+  );
 }
 
 // =============================================================================

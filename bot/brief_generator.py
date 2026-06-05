@@ -25,12 +25,14 @@ from supabase_client import (
     cache_articles,
     get_active_users,
     get_cached_articles,
+    get_cached_brief,
     get_seen_urls,
     get_user,
     log_delivery,
     mark_articles_seen,
     prune_old_articles,
     prune_old_seen_articles,
+    set_cached_brief,
 )
 
 logging.basicConfig(
@@ -216,6 +218,53 @@ def apply_format(full_brief: str, fmt: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Article prioritization
+# ---------------------------------------------------------------------------
+
+_SOURCE_TIER: dict[str, int] = {
+    # Government primary sources (highest authority)
+    "CISA":             30,
+    "Singapore CSA":    30,
+    "ENISA":            30,
+    # Tier-1 threat intelligence
+    "Mandiant":         20,
+    "Recorded Future":  20,
+    "Cisco Talos":      20,
+    "Unit 42":          20,
+    # Authoritative security journalism
+    "KrebsOnSecurity":  10,
+    "SecurityWeek":     10,
+    "The Hacker News":  10,
+    "Bleeping Computer": 10,
+    "The Record":       10,
+}
+
+
+def _score_article(article: dict, topics: list[str]) -> int:
+    score = _SOURCE_TIER.get(article["source"], 5)
+    text = (article["title"] + " " + article.get("summary", "")).lower()
+    for topic in topics:
+        if topic.lower() in text:
+            score += 5
+    pub = article.get("published_at")
+    if pub:
+        if pub.tzinfo is None:
+            pub = pub.replace(tzinfo=timezone.utc)
+        age_hours = (datetime.now(timezone.utc) - pub).total_seconds() / 3600
+        if age_hours <= 12:
+            score += 10
+        elif age_hours <= 24:
+            score += 5
+    return score
+
+
+def _prioritize_articles(articles: list[dict], topics: list[str], limit: int) -> list[dict]:
+    """Return the top `limit` articles sorted by score descending."""
+    scored = sorted(articles, key=lambda a: _score_article(a, topics), reverse=True)
+    return scored[:limit]
+
+
+# ---------------------------------------------------------------------------
 # Topic grouping — share one LLM call for users with identical topic sets
 # ---------------------------------------------------------------------------
 
@@ -249,6 +298,7 @@ async def process_user(
             bot_token=os.environ["TELEGRAM_BOT_TOKEN"],
         )
         mark_articles_seen(telegram_id, article_urls)
+        set_cached_brief(telegram_id, fmt, formatted_brief)
         log_delivery(
             user_id=telegram_id,
             status="success",
@@ -311,6 +361,14 @@ async def run(
         if not user:
             logger.error("User %d not found in database", target_telegram_id)
             return
+        # Check brief cache for single-user requests (skip LLM if warm)
+        if not force_refresh:
+            fmt = format_override or user.get("format", "tldr")
+            cached_brief = get_cached_brief(target_telegram_id, fmt)
+            if cached_brief:
+                logger.info("Cache hit for user %d (%s) — sending cached brief", target_telegram_id, fmt)
+                await process_user(user, cached_brief, [], format_override)
+                return
         users = [user]
     else:
         users = get_active_users()
@@ -345,8 +403,9 @@ async def run(
         else:
             relevant = all_articles
 
-        # Cap at 20 articles per LLM call to keep prompt size manageable
-        relevant = relevant[:20]
+        # Prioritize and cap: TL;DR uses top 5, other formats use top 20
+        article_limit = 5 if format_override == "tldr" else 20
+        relevant = _prioritize_articles(relevant, topics, article_limit)
 
         logger.info(
             "Topic group %r: %d users, %d articles → calling OpenRouter",
