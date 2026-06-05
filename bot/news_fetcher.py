@@ -50,7 +50,7 @@ RSS_FEEDS = {
     "CSET":              "https://cset.georgetown.edu/feed/",
     "OECD AI":           "https://oecd.ai/en/feed",
     # Singapore & EU AI governance
-    "IMDA":              "https://www.imda.gov.sg/resources/press-releases-factsheets-and-speeches",
+    "IMDA":              "https://www.imda.gov.sg/resources/press-releases-factsheets-and-speeches?page=1&support=all&type=all&year=all",
     "AI Verify Foundation": "https://aiverify.sg/",
     "EU AI Office":      "https://digital-strategy.ec.europa.eu/en/policies/artificial-intelligence",
 }
