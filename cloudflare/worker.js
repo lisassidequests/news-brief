@@ -199,10 +199,7 @@ async function handleFreeText(message, env) {
         .filter(Boolean)
         .slice(0, 10); // cap at 10 topics
 
-      await upsertUser(
-        { telegram_id: telegramId, topics: JSON.stringify(topics), onboarding_step: null },
-        env
-      );
+      await updateUser(telegramId, { topics: JSON.stringify(topics), onboarding_step: null }, env);
 
       const user2 = await getUser(telegramId, env);
       await sendMessage(
@@ -220,12 +217,12 @@ async function handleFreeText(message, env) {
 
     case "awaiting_feedback": {
       if (text.trim().toLowerCase() === "clear") {
-        await upsertUser({ telegram_id: telegramId, preferences: null, onboarding_step: null }, env);
+        await updateUser(telegramId, { preferences: null, onboarding_step: null }, env);
         await sendMessage(chatId, "✅ Preferences cleared.", env);
       } else {
         const existing = user.preferences || "";
         const combined = (text.trim() + (existing ? " | " + existing : "")).slice(0, 300);
-        await upsertUser({ telegram_id: telegramId, preferences: combined, onboarding_step: null }, env);
+        await updateUser(telegramId, { preferences: combined, onboarding_step: null }, env);
         await sendMessage(chatId, "✅ Saved — I'll apply this to your next brief.", env);
       }
       break;
@@ -253,10 +250,7 @@ async function handleCallbackQuery(callbackQuery, env) {
 
   if (data.startsWith("fmt:")) {
     const fmt = data.slice(4); // "full", "tldr", or "links"
-    await upsertUser(
-      { telegram_id: telegramId, format: fmt, onboarding_step: "awaiting_topics" },
-      env
-    );
+    await updateUser(telegramId, { format: fmt, onboarding_step: "awaiting_topics" }, env);
     await sendMessage(
       chatId,
       `✅ Format set to *${fmt.toUpperCase()}*.\n\nWhat topics interest you most? Reply with a comma-separated list.\n\n_Examples: CISA, ransomware, AI governance, supply chain, Singapore_\n\n(Or type "all" for everything)`,
@@ -270,11 +264,11 @@ async function handleCallbackQuery(callbackQuery, env) {
     await sendMessage(chatId, "▶️ Brief delivery resumed! You'll receive your next brief at 8:00 AM SGT.", env);
   } else if (data.startsWith("set:fmt:")) {
     const fmt = data.slice(8); // "full", "tldr", or "links"
-    await upsertUser({ telegram_id: telegramId, format: fmt, onboarding_step: null }, env);
+    await updateUser(telegramId, { format: fmt, onboarding_step: null }, env);
     await sendMessage(chatId, `✅ Format updated to *${fmt.toUpperCase()}*. Generating your updated brief…`, env);
     await triggerGitHubWorkflow(telegramId, fmt, env);
   } else if (data === "set:topics") {
-    await upsertUser({ telegram_id: telegramId, onboarding_step: "awaiting_topics" }, env);
+    await updateUser(telegramId, { onboarding_step: "awaiting_topics" }, env);
     await sendMessage(
       chatId,
       "What topics would you like to follow? Reply with a comma-separated list.\n\n" +
@@ -285,7 +279,7 @@ async function handleCallbackQuery(callbackQuery, env) {
   } else if (data === "set:prefs") {
     const user = await getUser(telegramId, env);
     const current = user?.preferences ? `\n\nCurrent note: _"${user.preferences}"_` : "";
-    await upsertUser({ telegram_id: telegramId, onboarding_step: "awaiting_feedback" }, env);
+    await updateUser(telegramId, { onboarding_step: "awaiting_feedback" }, env);
     await sendMessage(
       chatId,
       `What would make your brief better?${current}\n\n` +
@@ -297,7 +291,7 @@ async function handleCallbackQuery(callbackQuery, env) {
     await sendMessage(chatId, "👍 Thanks — glad it was useful!", env);
   } else if (data === "fb:down") {
     await saveFeedback(telegramId, "down", env);
-    await upsertUser({ telegram_id: telegramId, onboarding_step: "awaiting_feedback" }, env);
+    await updateUser(telegramId, { onboarding_step: "awaiting_feedback" }, env);
     await sendMessage(chatId,
       "What was off with today's brief? Tell me in your own words.\n\n" +
       "_Example: \"Too US-centric. I need more APAC coverage and shorter summaries.\"_",
@@ -307,7 +301,7 @@ async function handleCallbackQuery(callbackQuery, env) {
     const current = user?.preferences
       ? `\n\nCurrent note: _"${user.preferences}"_`
       : "";
-    await upsertUser({ telegram_id: telegramId, onboarding_step: "awaiting_feedback" }, env);
+    await updateUser(telegramId, { onboarding_step: "awaiting_feedback" }, env);
     await sendMessage(chatId,
       `What would make your brief better?${current}\n\n` +
       `_New text is added to your existing note. Reply "clear" to reset._`,
@@ -364,7 +358,7 @@ async function sendSettingsMenu(chatId, telegramId, user, env) {
     env
   );
   // Clear any stale onboarding state so free text isn't misinterpreted
-  await upsertUser({ telegram_id: telegramId, onboarding_step: null }, env);
+  await updateUser(telegramId, { onboarding_step: null }, env);
 }
 
 // =============================================================================
@@ -678,6 +672,10 @@ async function getUser(telegramId, env) {
 
 async function upsertUser(userData, env) {
   return supabaseRequest("POST", "users?on_conflict=telegram_id", userData, env);
+}
+
+async function updateUser(telegramId, data, env) {
+  return supabaseRequest("PATCH", `users?telegram_id=eq.${telegramId}`, data, env);
 }
 
 async function setUserActive(telegramId, isActive, env) {
