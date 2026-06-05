@@ -17,6 +17,7 @@
  *   GITHUB_PAT               — personal access token with workflow scope
  *   GITHUB_REPO_OWNER        — GitHub username or org
  *   GITHUB_REPO_NAME         — repository name (e.g. news-brief)
+ *   GITHUB_REF               — branch to dispatch workflows from (default: "main")
  */
 
 // =============================================================================
@@ -516,7 +517,7 @@ async function triggerGitHubWorkflow(telegramId, env) {
   const url = `https://api.github.com/repos/${env.GITHUB_REPO_OWNER}/${env.GITHUB_REPO_NAME}/actions/workflows/manual_brief.yml/dispatches`;
 
   const body = {
-    ref: "claude/telegram-cyber-brief-bot-XgjvW",
+    ref: env.GITHUB_REF || "main",
     inputs: { telegram_id: String(telegramId) },
   };
 
