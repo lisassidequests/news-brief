@@ -55,7 +55,7 @@ RSS_FEEDS = {
 }
 
 # Articles older than this are ignored
-MAX_AGE_HOURS = 48
+MAX_AGE_HOURS = 24
 
 REQUEST_TIMEOUT = 15  # seconds
 

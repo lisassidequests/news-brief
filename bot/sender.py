@@ -79,20 +79,29 @@ def _split_brief_into_chunks(brief_text: str) -> list[str]:
 
 def _build_index_message(brief_text: str) -> str:
     """
-    Build a single quick-reference message: all numbered headlines + article
-    links from the brief, in one block. Sent before the detailed story chunks.
+    Build a single quick-reference message: numbered headline + source/date +
+    article link for every story, in one block sent before the detailed chunks.
     """
     lines = brief_text.split("\n")
     entries = []
     current_headline: str | None = None
+    current_source: str | None = None
 
     for line in lines:
         stripped = line.strip()
         if re.match(r"^\*?\d+\.[ \t]", stripped):
             current_headline = line.rstrip()
+            current_source = None
+        elif stripped.startswith("_Primary Source") and current_headline:
+            current_source = stripped
         elif stripped.startswith("[Read the full article]") and current_headline:
-            entries.append(f"{current_headline}\n{stripped}")
+            parts = [current_headline]
+            if current_source:
+                parts.append(current_source)
+            parts.append(stripped)
+            entries.append("\n".join(parts))
             current_headline = None
+            current_source = None
 
     if not entries:
         return ""
@@ -107,7 +116,7 @@ async def send_brief(telegram_id: int, brief_text: str, bot_token: str) -> None:
     """
     bot = Bot(token=bot_token)
     date_str = _sgt_now_str()
-    header = f"🛡 *Cyber Intel Brief — {date_str}*\n\n"
+    header = f"🛡 *Cyber & AI Policy Brief — {date_str}*\n\n"
 
     chunks = _split_brief_into_chunks(brief_text)
     if not chunks:

@@ -408,7 +408,7 @@ async function handleBrief(message, env, format, isPreview) {
       `⚡ *Personalised Preview*\n\nApplying your customisations: _"${previewSnippet}"_\n\nGenerating now — this takes about 30-60 seconds.`,
       env
     );
-    const triggered = await triggerGitHubWorkflow(telegramId, format, env);
+    const triggered = await triggerGitHubWorkflow(telegramId, format, env, true);
     if (!triggered) {
       await sendMessage(chatId, "❌ Failed to trigger brief generation. Please try again in a minute.", env);
     }
@@ -454,7 +454,7 @@ async function sendBriefChunks(chatId, briefText, env) {
     month: "short",
     year: "numeric",
   });
-  const header = `🛡 *Cyber Intel Brief — ${dateStr}, ${String(sgtHour).padStart(2, "0")}:${sgtMinute} SGT*\n\n`;
+  const header = `🛡 *Cyber & AI Policy Brief — ${dateStr}, ${String(sgtHour).padStart(2, "0")}:${sgtMinute} SGT*\n\n`;
 
   const TELEGRAM_MAX = 4000;
 
@@ -626,11 +626,12 @@ async function handleAdminBroadcast(message, text, env) {
 // GitHub Actions workflow_dispatch trigger
 // =============================================================================
 
-async function triggerGitHubWorkflow(telegramId, format, env) {
+async function triggerGitHubWorkflow(telegramId, format, env, forceRefresh = false) {
   const url = `https://api.github.com/repos/${env.GITHUB_REPO_OWNER}/${env.GITHUB_REPO_NAME}/actions/workflows/manual_brief.yml/dispatches`;
 
   const inputs = { telegram_id: String(telegramId) };
   if (format) inputs.format = format;
+  if (forceRefresh) inputs.force_refresh = "true";
 
   const body = {
     ref: env.GITHUB_REF || "main",
@@ -795,14 +796,22 @@ function buildIndexMessage(briefText) {
   const lines = briefText.split("\n");
   const entries = [];
   let currentHeadline = null;
+  let currentSource = null;
 
   for (const line of lines) {
     const stripped = line.trim();
     if (/^\*?\d+\.[ \t]/.test(stripped)) {
       currentHeadline = line.trimEnd();
+      currentSource = null;
+    } else if (stripped.startsWith("_Primary Source") && currentHeadline) {
+      currentSource = stripped;
     } else if (stripped.startsWith("[Read the full article]") && currentHeadline) {
-      entries.push(`${currentHeadline}\n${stripped}`);
+      const parts = [currentHeadline];
+      if (currentSource) parts.push(currentSource);
+      parts.push(stripped);
+      entries.push(parts.join("\n"));
       currentHeadline = null;
+      currentSource = null;
     }
   }
 

@@ -15,6 +15,11 @@ on:
         required: false
         type: string
         default: ""
+      force_refresh:
+        description: "Set to 'true' to bypass brief and article caches (used by /preview)"
+        required: false
+        type: string
+        default: ""
 
 jobs:
   send-brief:
@@ -40,6 +45,9 @@ jobs:
           ARGS="--user ${{ inputs.telegram_id }}"
           if [ -n "${{ inputs.format }}" ]; then
             ARGS="$ARGS --format ${{ inputs.format }}"
+          fi
+          if [ "${{ inputs.force_refresh }}" = "true" ]; then
+            ARGS="$ARGS --force-refresh"
           fi
           python bot/brief_generator.py $ARGS
         env:
