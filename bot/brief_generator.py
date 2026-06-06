@@ -76,7 +76,16 @@ _Primary Source: [Publication name] / [Secondary source if relevant] ([Date rang
 *The Policy Impact* _([Geographic scope — include Singapore focus where relevant]):_
 [2–3 sentences connecting the event to governance, regulatory, or strategic implications for the recipient's portfolio]
 
-*The "So What":* [One focused paragraph synthesising the key implication for a senior official. Frame as a diagnostic question or action their team should investigate. Reference specific Singapore agencies, legislation, or frameworks where applicable.]"""
+*The "So What":* [One focused paragraph synthesising the key implication for a senior official. Frame as a diagnostic question or action their team should investigate. Reference specific Singapore agencies, legislation, or frameworks where applicable.]
+
+CLOSING:
+After all stories, end with a table titled *Strategic Executive Summary for Your Briefing* — one row per story:
+
+| Core Focus | Today's Flashpoint | Immediate Policy Question to Ask Your Team |
+|---|---|---|
+| [Domain label, e.g. "Critical Infrastructure"] | [Key event in ≤12 words] | [One sharp question a senior official should put to their team] |
+
+Do not include a Source Link column. URLs are already in each story body."""
 
 REQUEST_TIMEOUT = 60  # OpenRouter can be slow under load
 
@@ -378,7 +387,19 @@ async def run(
             cached_brief = get_cached_brief(target_telegram_id, fmt)
             if cached_brief:
                 logger.info("Cache hit for user %d (%s) — sending cached brief", target_telegram_id, fmt)
-                await process_user(user, cached_brief, [], format_override)
+                try:
+                    await send_brief(
+                        telegram_id=target_telegram_id,
+                        brief_text=cached_brief,
+                        bot_token=os.environ["TELEGRAM_BOT_TOKEN"],
+                    )
+                    log_delivery(user_id=target_telegram_id, status="success", article_count=0)
+                except Exception as exc:
+                    log_delivery(
+                        user_id=target_telegram_id,
+                        status="failed",
+                        error_message=str(exc),
+                    )
                 return
         users = [user]
     else:

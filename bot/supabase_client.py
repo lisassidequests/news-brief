@@ -54,10 +54,10 @@ def get_user(telegram_id: int) -> Optional[dict]:
         .table("users")
         .select("*")
         .eq("telegram_id", telegram_id)
-        .maybe_single()
+        .limit(1)
         .execute()
     )
-    return resp.data
+    return resp.data[0] if resp.data else None
 
 
 def upsert_user(data: dict) -> dict:

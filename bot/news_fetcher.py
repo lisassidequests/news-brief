@@ -65,7 +65,7 @@ REQUEST_TIMEOUT = 15  # seconds
 # ---------------------------------------------------------------------------
 
 def _is_recent(dt: Optional[datetime]) -> bool:
-    """Return True if `dt` is within the last 48 hours (or if unknown)."""
+    """Return True if `dt` is within the last 24 hours (or if unknown)."""
     if dt is None:
         return True  # keep articles with no date rather than silently drop them
     cutoff = datetime.now(timezone.utc) - timedelta(hours=MAX_AGE_HOURS)
