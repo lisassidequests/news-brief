@@ -35,12 +35,14 @@ RSS_FEEDS = {
     "Recorded Future":   "https://www.recordedfuture.com/feed",
     "Cisco Talos":       "https://blog.talosintelligence.com/feeds/posts/default",
     "Unit 42":           "https://unit42.paloaltonetworks.com/feed/",
-    # Authoritative security journalism
+    # Authoritative security and financial journalism
     "KrebsOnSecurity":   "https://krebsonsecurity.com/feed/",
     "SecurityWeek":      "https://www.securityweek.com/feed/",
     "The Hacker News":   "https://feeds.feedburner.com/TheHackersNews",
     "Bleeping Computer": "https://www.bleepingcomputer.com/feed/",
     "The Record":        "https://therecord.media/feed",
+    "Bloomberg":         "https://feeds.bloomberg.com/technology/news.rss",
+    "Reuters":           "https://feeds.reuters.com/reuters/technologyNews",
     # AI news
     "Financial Times Tech":     "https://www.ft.com/technology?format=rss",
     "MIT Technology Review AI": "https://www.technologyreview.com/topic/artificial-intelligence/feed/",

@@ -247,17 +247,33 @@ _SOURCE_TIER: dict[str, int] = {
     "Stanford HAI":     20,
     "CSET":             20,
     "OECD AI":          20,
-    # Authoritative security journalism
+    # Authoritative security and financial journalism
     "KrebsOnSecurity":  10,
     "SecurityWeek":     10,
     "The Hacker News":  10,
     "Bleeping Computer": 10,
     "The Record":       10,
+    "Bloomberg":        10,
+    "Reuters":          10,
     # AI news
     "Financial Times Tech":     10,
     "MIT Technology Review AI": 10,
     "Semafor Technology":       10,
 }
+
+# Sources considered US-domestic in scope for the energy cap below
+_AMERICAN_SOURCES: frozenset[str] = frozenset({
+    "CISA", "KrebsOnSecurity", "SecurityWeek", "The Hacker News",
+    "Bleeping Computer", "The Record", "Bloomberg", "Reuters",
+})
+
+# Keywords that flag an article as primarily about the energy sector
+_ENERGY_KEYWORDS: frozenset[str] = frozenset({
+    "energy sector", "power grid", "electric grid", "electricity grid",
+    "oil pipeline", "natural gas", "petroleum", "nuclear power plant",
+    "power plant", "pipeline attack", "energy infrastructure",
+    "utility company", "critical energy", "coal plant", "grid attack",
+})
 
 
 def _score_article(article: dict, topics: list[str]) -> int:
@@ -278,10 +294,34 @@ def _score_article(article: dict, topics: list[str]) -> int:
     return score
 
 
+def _is_us_energy_article(article: dict) -> bool:
+    """Return True if the article is from an American source and covers energy."""
+    if article.get("source") not in _AMERICAN_SOURCES:
+        return False
+    text = (article["title"] + " " + article.get("summary", "")).lower()
+    return any(kw in text for kw in _ENERGY_KEYWORDS)
+
+
 def _prioritize_articles(articles: list[dict], topics: list[str], limit: int) -> list[dict]:
-    """Return the top `limit` articles sorted by score descending."""
+    """
+    Return the top `limit` articles by score, with US energy articles capped at 1.
+
+    Scoring runs first, then the energy cap removes excess energy articles from
+    American sources before the top-N slice — so the brief fills with other
+    relevant articles rather than leaving gaps.
+    """
     scored = sorted(articles, key=lambda a: _score_article(a, topics), reverse=True)
-    return scored[:limit]
+    # Apply US energy cap: keep at most 1 energy article from American sources
+    us_energy_seen = 0
+    capped = []
+    for a in scored:
+        if _is_us_energy_article(a):
+            if us_energy_seen < 1:
+                capped.append(a)
+                us_energy_seen += 1
+        else:
+            capped.append(a)
+    return capped[:limit]
 
 
 # ---------------------------------------------------------------------------
@@ -414,52 +454,68 @@ async def run(
     # Group by topic key to reuse LLM calls
     users_sorted = sorted(users, key=_topic_key)
     tasks = []
+    article_limit = 5 if format_override == "tldr" else 20
 
     for topic_key, group_iter in groupby(users_sorted, key=_topic_key):
         group = list(group_iter)
         topics = json.loads(topic_key)
 
-        # All articles are candidates — topics add scoring bonus only, not hard filter.
-        # This ensures every user always sees coverage across both cybersecurity and AI
-        # regardless of how narrowly they've defined their topics.
-        article_limit = 5 if format_override == "tldr" else 20
-        relevant = _prioritize_articles(all_articles, topics, article_limit)
-
-        logger.info(
-            "Topic group %r: %d users, %d articles → calling OpenRouter",
-            topic_key,
-            len(group),
-            len(relevant),
-        )
-
-        article_urls = [a["url"] for a in relevant]
-
         # Partition group: users with preferences need individual LLM calls
         users_no_prefs   = [u for u in group if not u.get("preferences")]
         users_with_prefs = [u for u in group if u.get("preferences")]
 
-        # Shared brief for users with no preferences (preserves grouping optimisation)
+        # Shared brief — fetch each user's seen URLs once, union them, then filter
+        # all_articles before passing to the LLM. This prevents yesterday's stories
+        # from appearing in today's brief while preserving the single-call optimisation.
         if users_no_prefs:
-            brief_text = call_openrouter(relevant, openrouter_key)
-            if brief_text:
-                for user in users_no_prefs:
-                    seen = get_seen_urls(user["telegram_id"])
-                    tasks.append(process_user(user, brief_text,
-                                              [u for u in article_urls if u not in seen],
-                                              format_override))
+            seen_per_user = {
+                u["telegram_id"]: get_seen_urls(u["telegram_id"])
+                for u in users_no_prefs
+            }
+            group_seen: set[str] = set().union(*seen_per_user.values())
+            fresh = [a for a in all_articles if a["url"] not in group_seen]
+            relevant = _prioritize_articles(fresh, topics, article_limit)
+
+            logger.info(
+                "Topic group %r (no-prefs): %d users, %d fresh articles → calling OpenRouter",
+                topic_key, len(users_no_prefs), len(relevant),
+            )
+
+            if relevant:
+                brief_text = call_openrouter(relevant, openrouter_key)
+                if brief_text:
+                    article_urls = [a["url"] for a in relevant]
+                    for user in users_no_prefs:
+                        user_seen = seen_per_user[user["telegram_id"]]
+                        new_urls = [url for url in article_urls if url not in user_seen]
+                        tasks.append(process_user(user, brief_text, new_urls, format_override))
+                else:
+                    for user in users_no_prefs:
+                        log_delivery(user_id=user["telegram_id"], status="failed",
+                                     error_message="OpenRouter returned no content")
             else:
-                for user in users_no_prefs:
-                    log_delivery(user_id=user["telegram_id"], status="failed",
-                                 error_message="OpenRouter returned no content")
+                logger.info("No new articles for group %r — no brief sent today", topic_key)
 
         # Per-user brief for users with custom preferences (capped at 200 chars)
         for user in users_with_prefs:
+            user_seen = get_seen_urls(user["telegram_id"])
+            fresh = [a for a in all_articles if a["url"] not in user_seen]
+            relevant = _prioritize_articles(fresh, topics, article_limit)
+
+            logger.info(
+                "User %d (with-prefs): %d fresh articles → calling OpenRouter",
+                user["telegram_id"], len(relevant),
+            )
+
+            if not relevant:
+                logger.info("No new articles for user %d — no brief sent today", user["telegram_id"])
+                continue
+
             prefs = (user.get("preferences") or "")[:200]
             brief_text = call_openrouter(relevant, openrouter_key, prefs)
             if brief_text:
-                seen = get_seen_urls(user["telegram_id"])
                 tasks.append(process_user(user, brief_text,
-                                          [u for u in article_urls if u not in seen]))
+                                          [a["url"] for a in relevant]))
             else:
                 log_delivery(user_id=user["telegram_id"], status="failed",
                              error_message="OpenRouter returned no content")
