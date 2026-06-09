@@ -73,10 +73,8 @@ _Primary Source: [Publication name] / [Secondary source if relevant] ([Date rang
 
 *The Technical Event:* [2–3 sentences, factual plain-English description of what happened]
 
-*The Policy Impact* _([Geographic scope — include Singapore focus where relevant]):_
-[2–3 sentences connecting the event to governance, regulatory, or strategic implications for the recipient's portfolio]
-
-*The "So What":* [One focused paragraph synthesising the key implication for a senior official. Frame as a diagnostic question or action their team should investigate. Reference specific Singapore agencies, legislation, or frameworks where applicable.]
+*The Policy Implication* _([Geographic scope — include Singapore focus where relevant]):_
+[3–4 sentences covering: what this event means for governance or regulatory portfolios; which specific Singapore agencies, legislation, or frameworks are implicated (CSA, IMDA, MAS, CII operators, Cybersecurity Act, Cybersecurity (Amendment) Act 2024, PDPA, ASEAN Digital Masterplan); and one diagnostic question or action a senior official should put to their team.]
 
 CLOSING:
 After all stories, end with a table titled *Strategic Executive Summary for Your Briefing* — one row per story:
@@ -206,7 +204,7 @@ def apply_format(full_brief: str, fmt: str) -> str:
                 output_lines.append(line)
             elif stripped.startswith("[Read the full article]"):
                 output_lines.append(line)
-            elif "Policy Impact" in stripped:
+            elif "Policy Implication" in stripped or "Policy Impact" in stripped:
                 in_policy = True
                 output_lines.append(line)
             elif in_policy:
