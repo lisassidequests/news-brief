@@ -13,7 +13,7 @@ import json
 import logging
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from itertools import groupby
 from typing import Optional
 
@@ -123,7 +123,9 @@ def call_openrouter(
     Send articles to OpenRouter and return the generated brief text.
     Returns None on failure so the caller can log and continue.
     """
+    sgt_today = (datetime.now(timezone.utc) + timedelta(hours=8)).strftime("%A, %d %B %Y")
     user_message = (
+        f"Today's date (Singapore Time): {sgt_today}\n\n"
         "Please generate the cyber intelligence brief based on the following "
         "articles. Use ONLY these articles — do not reference any other sources.\n\n"
         + _format_articles_for_prompt(articles)

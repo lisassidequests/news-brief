@@ -56,6 +56,9 @@ Articles are pulled exclusively from hand-curated RSS feeds — no general news 
 **Cybersecurity — Authoritative journalism**
 - KrebsOnSecurity, SecurityWeek, The Hacker News, Bleeping Computer, The Record
 
+**Global news and financial journalism**
+- Bloomberg Technology, Reuters Technology
+
 **AI news**
 - Financial Times Technology, MIT Technology Review (AI), Semafor Technology
 
